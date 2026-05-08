@@ -11,6 +11,7 @@ interface RawComment {
   user_id: string;
   body: string;
   is_anonymous: boolean;
+  pinned: boolean;
   created_at: string;
   users: { full_name: string | null } | null;
 }
@@ -20,6 +21,10 @@ interface PublicComment {
   question_id: string;
   body: string;
   is_anonymous: boolean;
+  pinned: boolean;
+  upvote_count: number;
+  has_upvoted: boolean;
+  can_pin: boolean;
   created_at: string;
   author: string;
   is_mine: boolean;
@@ -44,30 +49,71 @@ export async function GET(
     const { from, to } = getPagination(page, limit);
 
     const supabase = await createClient();
-    const { authUser } = await getAuthUser();
+    const { authUser, profile } = await getAuthUser();
 
     const { data, count, error: dbError } = await supabase
       .from('question_comments')
       .select(
-        'id, question_id, user_id, body, is_anonymous, created_at, users(full_name)',
+        'id, question_id, user_id, body, is_anonymous, pinned, created_at, users(full_name)',
         { count: 'exact' },
       )
       .eq('question_id', id)
       .eq('is_hidden', false)
+      .order('pinned', { ascending: false })
       .order('created_at', { ascending: true })
       .range(from, to);
 
     if (dbError) return serverError(dbError.message);
 
-    const sanitized: PublicComment[] = ((data ?? []) as unknown as RawComment[]).map((c) => ({
+    const rows = ((data ?? []) as unknown as RawComment[]);
+    const commentIds = rows.map((c) => c.id);
+
+    // Aggregate upvote counts + the current user's upvotes in two cheap queries.
+    const upvoteCounts = new Map<string, number>();
+    const myUpvotes = new Set<string>();
+    if (commentIds.length > 0) {
+      const { data: upvoteRows } = await supabase
+        .from('comment_upvotes')
+        .select('comment_id, user_id')
+        .in('comment_id', commentIds);
+      for (const u of upvoteRows ?? []) {
+        upvoteCounts.set(u.comment_id, (upvoteCounts.get(u.comment_id) ?? 0) + 1);
+        if (authUser && u.user_id === authUser.id) myUpvotes.add(u.comment_id);
+      }
+    }
+
+    let canPin = profile?.role === 'admin';
+    if (!canPin && authUser) {
+      const { data: contrib } = await supabase
+        .from('question_contributions')
+        .select('user_id')
+        .eq('question_id', id)
+        .eq('user_id', authUser.id)
+        .in('contribution_type', ['upload', 'extraction'])
+        .maybeSingle();
+      canPin = !!contrib;
+    }
+
+    const sanitized: PublicComment[] = rows.map((c) => ({
       id: c.id,
       question_id: c.question_id,
       body: c.body,
       is_anonymous: c.is_anonymous,
+      pinned: c.pinned,
+      upvote_count: upvoteCounts.get(c.id) ?? 0,
+      has_upvoted: myUpvotes.has(c.id),
+      can_pin: canPin,
       created_at: c.created_at,
       author: c.is_anonymous ? 'Anonymous student' : (c.users?.full_name ?? 'Student'),
       is_mine: !!authUser && authUser.id === c.user_id,
     }));
+
+    // Re-sort: pinned first, then upvote_count desc, then created_at asc.
+    sanitized.sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      if (a.upvote_count !== b.upvote_count) return b.upvote_count - a.upvote_count;
+      return a.created_at.localeCompare(b.created_at);
+    });
 
     return paginated(sanitized, count ?? 0, page, limit);
   } catch {
@@ -113,6 +159,10 @@ export async function POST(
     if (dbError) return serverError(dbError.message);
     return created({
       ...data,
+      pinned: false,
+      upvote_count: 0,
+      has_upvoted: false,
+      can_pin: profile.role === 'admin',
       author: (parsed.data.is_anonymous ?? true) ? 'Anonymous student' : (profile.full_name ?? 'Student'),
       is_mine: true,
     });

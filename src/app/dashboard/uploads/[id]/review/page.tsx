@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
+import { ArrowLeftIcon, ArrowRightIcon } from '@/components/icons';
 
 interface Extraction {
   id: string;
@@ -40,6 +41,7 @@ export default function ReviewExtractionsPage({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ published: number; skipped: number } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,8 +79,10 @@ export default function ReviewExtractionsPage({
   }
 
   async function confirmAll() {
+    if (confirming || done) return;
     setConfirming(true);
     setError('');
+    setConfirmOpen(false);
     try {
       const res = await fetch(`/api/uploads/${id}/confirm`, { method: 'POST' });
       const json = await res.json();
@@ -97,8 +101,8 @@ export default function ReviewExtractionsPage({
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/dashboard/uploads" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
-            ← Uploads
+          <Link href="/dashboard/uploads" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+            <ArrowLeftIcon size={14} /> Uploads
           </Link>
           <span className="text-zinc-300 dark:text-zinc-700">|</span>
           <Link href="/" className="flex items-center gap-2">
@@ -129,7 +133,7 @@ export default function ReviewExtractionsPage({
           <div className="mb-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm px-4 py-3 rounded-lg">
             Published {done.published} question{done.published === 1 ? '' : 's'}.
             {done.skipped ? ` ${done.skipped} skipped.` : ''}{' '}
-            <Link href="/questions" className="underline font-medium">View question bank →</Link>
+            <Link href="/questions" className="underline font-medium inline-flex items-center gap-1">View question bank <ArrowRightIcon size={12} /></Link>
           </div>
         )}
 
@@ -175,16 +179,46 @@ export default function ReviewExtractionsPage({
                 Save & finish later
               </Link>
               <button
-                disabled={confirming || willPublish === 0}
-                onClick={confirmAll}
+                disabled={confirming || willPublish === 0 || !!done}
+                onClick={() => setConfirmOpen(true)}
                 className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg"
               >
-                {confirming ? 'Publishing…' : `Confirm & publish ${willPublish} question${willPublish === 1 ? '' : 's'}`}
+                {done
+                  ? 'Published'
+                  : confirming
+                  ? 'Publishing…'
+                  : `Publish ${willPublish} question${willPublish === 1 ? '' : 's'}`}
               </button>
             </div>
           </>
         )}
       </div>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
+            <h2 className="font-semibold text-zinc-900 dark:text-white mb-2">Publish {willPublish} question{willPublish === 1 ? '' : 's'}?</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
+              These will go live in the question bank immediately. You can&apos;t publish this batch again from this page.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                className="flex-1 px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAll}
+                disabled={confirming}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg"
+              >
+                {confirming ? 'Publishing…' : 'Yes, publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -269,6 +303,22 @@ function ExtractionCard({
         rows={Math.max(2, ext.question_text.split('\n').length)}
         className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
       />
+
+      {ext.question_type === 'theory' && (
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Suggested answer (optional — shown to students who attempt this question)
+          </label>
+          <textarea
+            value={ext.correct_answer ?? ''}
+            onChange={(e) => onPatchLocal({ correct_answer: e.target.value })}
+            onBlur={(e) => onSave({ correct_answer: e.target.value || null })}
+            rows={4}
+            placeholder="Write the model answer or marking guide. Leave blank if you only have the question."
+            className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
+      )}
 
       {ext.question_type === 'mcq' && (
         <div className="mt-3 space-y-2">

@@ -20,11 +20,14 @@ export async function POST(
 
     const { data: upload } = await supabase
       .from('uploads')
-      .select('id, user_id, course_id')
+      .select('id, user_id, course_id, needs_review, processing_stage')
       .eq('id', id)
       .single();
     if (!upload) return notFound('Upload not found');
     if (profile.role !== 'admin' && upload.user_id !== profile.id) return forbidden();
+    if (upload.processing_stage === 'Published' || upload.needs_review === false) {
+      return ok({ published: 0, skipped: 0, already_published: true }, 'This batch has already been published');
+    }
 
     const adminSupabase = createAdminClient();
 

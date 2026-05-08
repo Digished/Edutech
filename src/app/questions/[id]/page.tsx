@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
+import { ArrowLeftIcon, CheckIcon, FlagIcon, PinIcon, XIcon, ChevronUpIcon } from '@/components/icons';
 
 interface Question {
   id: string;
@@ -25,9 +26,21 @@ interface Comment {
   id: string;
   body: string;
   is_anonymous: boolean;
+  pinned: boolean;
+  upvote_count: number;
+  has_upvoted: boolean;
+  can_pin: boolean;
   author: string;
   is_mine: boolean;
   created_at: string;
+}
+
+function sortComments(list: Comment[]): Comment[] {
+  return [...list].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    if (a.upvote_count !== b.upvote_count) return b.upvote_count - a.upvote_count;
+    return a.created_at.localeCompare(b.created_at);
+  });
 }
 
 export default function QuestionDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -45,6 +58,13 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
   const [commentBody, setCommentBody] = useState('');
   const [anonymous, setAnonymous] = useState(true);
   const [posting, setPosting] = useState(false);
+
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState<string>('incorrect_answer');
+  const [flagDetails, setFlagDetails] = useState('');
+  const [flagging, setFlagging] = useState(false);
+  const [flagDone, setFlagDone] = useState(false);
+  const [flagError, setFlagError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,7 +87,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
         if (qJson.data?.question_type === 'mcq') setPickedOption(a.answer);
         else setTheoryAnswer(a.answer);
       }
-      setComments(cJson.data ?? []);
+      setComments(sortComments(cJson.data ?? []));
     } finally {
       setLoading(false);
     }
@@ -106,11 +126,64 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
       });
       const json = await res.json();
       if (res.ok) {
-        setComments((prev) => [...prev, json.data]);
+        setComments((prev) => sortComments([...prev, json.data]));
         setCommentBody('');
       }
     } finally {
       setPosting(false);
+    }
+  }
+
+  async function submitFlag() {
+    setFlagError('');
+    setFlagging(true);
+    try {
+      const res = await fetch(`/api/questions/${id}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: flagReason, details: flagDetails || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setFlagError(json.error ?? 'Could not submit flag'); return; }
+      setFlagDone(true);
+      setFlagDetails('');
+      setTimeout(() => { setFlagOpen(false); setFlagDone(false); }, 1200);
+    } finally {
+      setFlagging(false);
+    }
+  }
+
+  async function toggleUpvote(commentId: string) {
+    setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? {
+      ...c,
+      has_upvoted: !c.has_upvoted,
+      upvote_count: c.upvote_count + (c.has_upvoted ? -1 : 1),
+    } : c)));
+    const res = await fetch(`/api/questions/${id}/comments/${commentId}/upvote`, { method: 'POST' });
+    if (!res.ok) {
+      // Revert on error.
+      setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? {
+        ...c,
+        has_upvoted: !c.has_upvoted,
+        upvote_count: c.upvote_count + (c.has_upvoted ? -1 : 1),
+      } : c)));
+      return;
+    }
+    const json = await res.json();
+    if (json.data) {
+      setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? {
+        ...c,
+        has_upvoted: json.data.upvoted,
+        upvote_count: json.data.upvote_count,
+      } : c)));
+    }
+  }
+
+  async function togglePin(commentId: string, currentlyPinned: boolean) {
+    setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? { ...c, pinned: !currentlyPinned } : c)));
+    const res = await fetch(`/api/questions/${id}/comments/${commentId}/pin`, { method: 'POST' });
+    if (!res.ok) {
+      setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? { ...c, pinned: currentlyPinned } : c)));
     }
   }
 
@@ -140,14 +213,23 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/questions" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
-            ← Question bank
+          <Link href="/questions" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+            <ArrowLeftIcon size={14} /> Question bank
           </Link>
         </div>
       </nav>
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
+          <div className="flex items-center justify-end mb-2">
+            <button
+              type="button"
+              onClick={() => setFlagOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              <FlagIcon size={12} /> Flag this question
+            </button>
+          </div>
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span className={`text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded ${
               question.question_type === 'theory'
@@ -222,7 +304,9 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
               </button>
               {attempt && question.question_type === 'mcq' && attempt.is_correct !== null && (
                 <span className={`text-xs font-medium ${attempt.is_correct ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {attempt.is_correct ? '✓ Correct' : `✗ Incorrect${question.correct_answer ? ` — correct answer is ${question.correct_answer}` : ''}`}
+                  <span className="inline-flex items-center gap-1">
+                    {attempt.is_correct ? <><CheckIcon size={14} /> Correct</> : <><XIcon size={14} /> Incorrect{question.correct_answer ? ` — correct answer is ${question.correct_answer}` : ''}</>}
+                  </span>
                 </span>
               )}
               {attempt && question.question_type === 'theory' && (
@@ -234,28 +318,67 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Comments */}
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">
-            Discussion ({comments.length})
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-1">
+            Answers & discussion ({comments.length})
           </h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+            Upvote answers you find helpful. Pinned answers appear at the top.
+          </p>
 
           {comments.length === 0 ? (
             <p className="text-sm text-zinc-400">Be the first to share an explanation or alternative answer.</p>
           ) : (
             <div className="space-y-3">
               {comments.map((c) => (
-                <div key={c.id} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-4 py-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{c.author}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-zinc-400">{new Date(c.created_at).toLocaleString()}</span>
-                      {c.is_mine && (
-                        <button onClick={() => deleteComment(c.id)} className="text-xs text-zinc-400 hover:text-red-600">
-                          Delete
-                        </button>
-                      )}
+                <div
+                  key={c.id}
+                  className={`flex gap-3 rounded-lg px-4 py-3 border ${
+                    c.pinned
+                      ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900'
+                      : 'bg-zinc-50 dark:bg-zinc-800/50 border-transparent'
+                  }`}
+                >
+                  <button
+                    onClick={() => toggleUpvote(c.id)}
+                    aria-label={c.has_upvoted ? 'Remove upvote' : 'Upvote answer'}
+                    className={`flex flex-col items-center justify-start shrink-0 w-10 rounded-md py-1 text-xs font-semibold transition-colors ${
+                      c.has_upvoted
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-green-300'
+                    }`}
+                  >
+                    <ChevronUpIcon size={14} />
+                    <span className="mt-0.5">{c.upvote_count}</span>
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{c.author}</span>
+                        {c.pinned && (
+                          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                            <PinIcon size={10} /> Pinned
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-zinc-400">{new Date(c.created_at).toLocaleString()}</span>
+                        {c.can_pin && (
+                          <button
+                            onClick={() => togglePin(c.id, c.pinned)}
+                            className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+                          >
+                            {c.pinned ? 'Unpin' : 'Pin'}
+                          </button>
+                        )}
+                        {c.is_mine && (
+                          <button onClick={() => deleteComment(c.id)} className="text-xs text-zinc-400 hover:text-red-600">
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-line">{c.body}</p>
                   </div>
-                  <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-line">{c.body}</p>
                 </div>
               ))}
             </div>
@@ -290,6 +413,51 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
           </form>
         </div>
       </div>
+
+      {flagOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
+            <h2 className="font-semibold text-zinc-900 dark:text-white mb-2">Flag this question</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              Tell us what&apos;s wrong. Admins review every flag.
+            </p>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Reason</label>
+            <select
+              value={flagReason}
+              onChange={(e) => setFlagReason(e.target.value)}
+              className="w-full mb-3 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="incorrect_answer">Incorrect answer</option>
+              <option value="duplicate">Duplicate of another question</option>
+              <option value="offensive">Offensive content</option>
+              <option value="wrong_course">Wrong course / category</option>
+              <option value="typo">Typo or formatting</option>
+              <option value="other">Other</option>
+            </select>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Details (optional)</label>
+            <textarea
+              value={flagDetails}
+              onChange={(e) => setFlagDetails(e.target.value)}
+              rows={3}
+              placeholder="Add any extra context that helps an admin review."
+              className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            {flagError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{flagError}</p>}
+            {flagDone && <p className="mt-2 text-xs text-green-700 dark:text-green-400">Thanks — your flag was submitted.</p>}
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setFlagOpen(false); setFlagError(''); setFlagDone(false); }}
+                className="flex-1 px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                Close
+              </button>
+              <button onClick={submitFlag}
+                disabled={flagging || flagDone}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg">
+                {flagging ? 'Submitting…' : flagDone ? 'Submitted' : 'Submit flag'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
