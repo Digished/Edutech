@@ -450,6 +450,35 @@ CREATE POLICY "admin_all_notifications" ON public.notifications
   );
 
 -- ============================================================
+-- ROLE GRANTS
+-- Required: without these the anon/authenticated roles get
+-- "permission denied" even when RLS policies would allow access.
+-- ============================================================
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- Public read-only tables (courses, approved questions, analytics)
+GRANT SELECT ON public.courses            TO anon, authenticated;
+GRANT SELECT ON public.questions          TO anon, authenticated;
+GRANT SELECT ON public.question_analytics TO anon, authenticated;
+
+-- Authenticated users full access (RLS still controls rows)
+GRANT SELECT, INSERT, UPDATE        ON public.users                  TO authenticated;
+GRANT INSERT, UPDATE                ON public.courses                TO authenticated;
+GRANT INSERT, UPDATE, DELETE        ON public.questions              TO authenticated;
+GRANT SELECT, INSERT                ON public.question_contributions TO authenticated;
+GRANT SELECT, INSERT                ON public.uploads                TO authenticated;
+GRANT SELECT                        ON public.wallet_ledger          TO authenticated;
+GRANT SELECT, INSERT                ON public.withdrawals            TO authenticated;
+GRANT SELECT, INSERT                ON public.notifications          TO authenticated;
+GRANT UPDATE                        ON public.notifications          TO authenticated;
+GRANT SELECT                        ON public.revenue_pool           TO authenticated;
+GRANT SELECT                        ON public.question_duplicates    TO authenticated;
+
+-- Service role gets full access (used by admin client, bypasses RLS)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+
+-- ============================================================
 -- STORAGE BUCKETS (run via Supabase dashboard or migration)
 -- ============================================================
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('exam-uploads', 'exam-uploads', false);
