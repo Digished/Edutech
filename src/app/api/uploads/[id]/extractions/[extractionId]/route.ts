@@ -5,6 +5,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { hashQuestionText } from '@/lib/utils/hash';
 import { requireRole } from '@/lib/utils/auth';
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from '@/lib/utils/response';
+import type { Database } from '@/types/supabase';
+
+type ExtractionUpdate = Database['public']['Tables']['upload_extractions']['Update'];
 
 const schema = z.object({
   question_text: z.string().min(1).optional(),
@@ -37,8 +40,8 @@ export async function PATCH(
     if (!upload) return notFound('Upload not found');
     if (profile.role !== 'admin' && upload.user_id !== profile.id) return forbidden();
 
-    const update: Record<string, unknown> = { ...parsed.data };
-    // Recompute hash + duplicate flag if the text changed.
+    const update: ExtractionUpdate = { ...parsed.data };
+    // Recompute hash if the text changed.
     if (typeof parsed.data.question_text === 'string') {
       update.content_hash = hashQuestionText(parsed.data.question_text);
     }
