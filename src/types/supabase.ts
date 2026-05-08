@@ -48,6 +48,50 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
+      universities: {
+        Row: {
+          id: string;
+          name: string;
+          short_name: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          short_name?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          short_name?: string | null;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      departments: {
+        Row: {
+          id: string;
+          university_id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          university_id: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          university_id?: string;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
       courses: {
         Row: {
           id: string;

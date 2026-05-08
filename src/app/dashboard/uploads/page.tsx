@@ -22,6 +22,9 @@ interface Course {
   department: string;
 }
 
+interface University { id: string; name: string }
+interface Department { id: string; name: string; university_id: string }
+
 export default function UploadsPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -42,6 +45,8 @@ export default function UploadsPage() {
   const [courseForm, setCourseForm] = useState({ name: '', code: '', school: '', department: '' });
   const [courseLoading, setCourseLoading] = useState(false);
   const [courseError, setCourseError] = useState('');
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   const limit = 20;
 
@@ -68,6 +73,21 @@ export default function UploadsPage() {
 
   useEffect(() => { loadUploads(page); }, [page]);
   useEffect(() => { loadCourses(); }, []);
+
+  useEffect(() => {
+    fetch('/api/universities').then(async (r) => {
+      const j = await r.json();
+      setUniversities(j.data ?? []);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!courseForm.school) { setDepartments([]); return; }
+    fetch(`/api/departments?university=${encodeURIComponent(courseForm.school)}`).then(async (r) => {
+      const j = await r.json();
+      setDepartments(j.data ?? []);
+    });
+  }, [courseForm.school]);
 
   async function handleAddCourse(e: React.FormEvent) {
     e.preventDefault();
@@ -238,22 +258,46 @@ export default function UploadsPage() {
                       placeholder="Course code (e.g. CSC301)"
                       className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
-                    <input
-                      type="text"
-                      required={showAddCourse}
-                      value={courseForm.school}
-                      onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value }))}
-                      placeholder="University *"
-                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                    <input
-                      type="text"
-                      required={showAddCourse}
-                      value={courseForm.department}
-                      onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
-                      placeholder="Department *"
-                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
+                    {universities.length > 0 ? (
+                      <select
+                        required={showAddCourse}
+                        value={courseForm.school}
+                        onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value, department: '' }))}
+                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="">University *</option>
+                        {universities.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        required={showAddCourse}
+                        value={courseForm.school}
+                        onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value }))}
+                        placeholder="University *"
+                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    )}
+                    {departments.length > 0 ? (
+                      <select
+                        required={showAddCourse}
+                        value={courseForm.department}
+                        onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
+                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="">Department *</option>
+                        {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        required={showAddCourse}
+                        value={courseForm.department}
+                        onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
+                        placeholder="Department *"
+                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    )}
                   </div>
                   <button
                     type="button"

@@ -72,12 +72,26 @@ export async function POST(req: NextRequest) {
 
     const adminSupabase = createAdminClient();
 
-    const { error: storageError } = await adminSupabase.storage
-      .from('exam-uploads')
-      .upload(storagePath, file, {
-        contentType: file.type,
+    async function uploadOnce() {
+      return adminSupabase.storage.from('exam-uploads').upload(storagePath, file!, {
+        contentType: file!.type,
         upsert: false,
       });
+    }
+
+    let { error: storageError } = await uploadOnce();
+
+    // Auto-provision the bucket if it doesn't exist yet, then retry once.
+    if (storageError && /bucket not found/i.test(storageError.message)) {
+      const { error: createErr } = await adminSupabase.storage.createBucket('exam-uploads', {
+        public: false,
+        fileSizeLimit: MAX_FILE_SIZE,
+      });
+      if (createErr && !/already exists/i.test(createErr.message)) {
+        return serverError(`Storage setup error: ${createErr.message}`);
+      }
+      ({ error: storageError } = await uploadOnce());
+    }
 
     if (storageError) return serverError(`Storage error: ${storageError.message}`);
 
