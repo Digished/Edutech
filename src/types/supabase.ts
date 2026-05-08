@@ -345,6 +345,35 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
+      question_flags: {
+        Row: {
+          id: string;
+          question_id: string;
+          user_id: string;
+          reason: string;
+          details: string | null;
+          status: string;
+          created_at: string;
+          reviewed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          question_id: string;
+          user_id: string;
+          reason: string;
+          details?: string | null;
+          status?: string;
+          created_at?: string;
+          reviewed_at?: string | null;
+        };
+        Update: {
+          reason?: string;
+          details?: string | null;
+          status?: string;
+          reviewed_at?: string | null;
+        };
+        Relationships: EmptyRelationships;
+      };
       question_analytics: {
         Row: {
           id: string;

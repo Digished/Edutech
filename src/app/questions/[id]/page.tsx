@@ -46,6 +46,13 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
   const [anonymous, setAnonymous] = useState(true);
   const [posting, setPosting] = useState(false);
 
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState<string>('incorrect_answer');
+  const [flagDetails, setFlagDetails] = useState('');
+  const [flagging, setFlagging] = useState(false);
+  const [flagDone, setFlagDone] = useState(false);
+  const [flagError, setFlagError] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -114,6 +121,25 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
+  async function submitFlag() {
+    setFlagError('');
+    setFlagging(true);
+    try {
+      const res = await fetch(`/api/questions/${id}/flag`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: flagReason, details: flagDetails || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setFlagError(json.error ?? 'Could not submit flag'); return; }
+      setFlagDone(true);
+      setFlagDetails('');
+      setTimeout(() => { setFlagOpen(false); setFlagDone(false); }, 1200);
+    } finally {
+      setFlagging(false);
+    }
+  }
+
   async function deleteComment(commentId: string) {
     if (!confirm('Delete this comment?')) return;
     const res = await fetch(`/api/questions/${id}/comments/${commentId}`, { method: 'DELETE' });
@@ -148,6 +174,15 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
+          <div className="flex items-center justify-end mb-2">
+            <button
+              type="button"
+              onClick={() => setFlagOpen(true)}
+              className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+            >
+              🚩 Flag this question
+            </button>
+          </div>
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span className={`text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded ${
               question.question_type === 'theory'
@@ -290,6 +325,51 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
           </form>
         </div>
       </div>
+
+      {flagOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
+            <h2 className="font-semibold text-zinc-900 dark:text-white mb-2">Flag this question</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              Tell us what&apos;s wrong. Admins review every flag.
+            </p>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Reason</label>
+            <select
+              value={flagReason}
+              onChange={(e) => setFlagReason(e.target.value)}
+              className="w-full mb-3 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="incorrect_answer">Incorrect answer</option>
+              <option value="duplicate">Duplicate of another question</option>
+              <option value="offensive">Offensive content</option>
+              <option value="wrong_course">Wrong course / category</option>
+              <option value="typo">Typo or formatting</option>
+              <option value="other">Other</option>
+            </select>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Details (optional)</label>
+            <textarea
+              value={flagDetails}
+              onChange={(e) => setFlagDetails(e.target.value)}
+              rows={3}
+              placeholder="Add any extra context that helps an admin review."
+              className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            {flagError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{flagError}</p>}
+            {flagDone && <p className="mt-2 text-xs text-green-700 dark:text-green-400">Thanks — your flag was submitted.</p>}
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => { setFlagOpen(false); setFlagError(''); setFlagDone(false); }}
+                className="flex-1 px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
+                Close
+              </button>
+              <button onClick={submitFlag}
+                disabled={flagging || flagDone}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg">
+                {flagging ? 'Submitting…' : flagDone ? 'Submitted' : 'Submit flag'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

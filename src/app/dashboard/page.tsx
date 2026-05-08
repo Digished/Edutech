@@ -178,6 +178,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'Browse questions', href: '/questions', icon: '📚', desc: 'Search the question bank' },
+            { label: 'Practice exam', href: '/dashboard/practice', icon: '🧪', desc: 'Sit a timed mock exam' },
             { label: 'Upload paper', href: '/dashboard/uploads', icon: '📤', desc: 'Upload a past question PDF' },
             { label: 'My wallet', href: '/dashboard/wallet', icon: '💰', desc: 'View balance & withdraw' },
             { label: 'Contributions', href: '/dashboard/contributions', icon: '✍️', desc: 'See what you\'ve added' },

@@ -40,6 +40,7 @@ export default function ReviewExtractionsPage({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ published: number; skipped: number } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,8 +78,10 @@ export default function ReviewExtractionsPage({
   }
 
   async function confirmAll() {
+    if (confirming || done) return;
     setConfirming(true);
     setError('');
+    setConfirmOpen(false);
     try {
       const res = await fetch(`/api/uploads/${id}/confirm`, { method: 'POST' });
       const json = await res.json();
@@ -175,16 +178,46 @@ export default function ReviewExtractionsPage({
                 Save & finish later
               </Link>
               <button
-                disabled={confirming || willPublish === 0}
-                onClick={confirmAll}
+                disabled={confirming || willPublish === 0 || !!done}
+                onClick={() => setConfirmOpen(true)}
                 className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg"
               >
-                {confirming ? 'Publishing…' : `Confirm & publish ${willPublish} question${willPublish === 1 ? '' : 's'}`}
+                {done
+                  ? 'Published'
+                  : confirming
+                  ? 'Publishing…'
+                  : `Publish ${willPublish} question${willPublish === 1 ? '' : 's'}`}
               </button>
             </div>
           </>
         )}
       </div>
+
+      {confirmOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
+            <h2 className="font-semibold text-zinc-900 dark:text-white mb-2">Publish {willPublish} question{willPublish === 1 ? '' : 's'}?</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
+              These will go live in the question bank immediately. You can&apos;t publish this batch again from this page.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmOpen(false)}
+                className="flex-1 px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmAll}
+                disabled={confirming}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg"
+              >
+                {confirming ? 'Publishing…' : 'Yes, publish'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
