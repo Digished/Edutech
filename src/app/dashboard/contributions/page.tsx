@@ -5,8 +5,8 @@ import Link from 'next/link';
 
 interface Contribution {
   id: string;
-  type: 'upload' | 'extraction' | 'correction' | 'edit' | 'moderation';
-  weight: number;
+  contribution_type: 'upload' | 'extraction' | 'correction' | 'edit' | 'moderation';
+  contribution_weight: number;
   created_at: string;
   questions: { question_text: string; courses: { name: string } | null } | null;
 }
@@ -118,8 +118,8 @@ export default function ContributionsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadge[c.type] ?? 'bg-zinc-100 text-zinc-600'}`}>
-                          {typeLabel[c.type] ?? c.type}
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${typeBadge[c.contribution_type] ?? 'bg-zinc-100 text-zinc-600'}`}>
+                          {typeLabel[c.contribution_type] ?? c.contribution_type}
                         </span>
                         <span className="text-xs text-zinc-400">
                           {new Date(c.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}
@@ -135,7 +135,7 @@ export default function ContributionsPage() {
                       )}
                     </div>
                     <div className="shrink-0 text-right">
-                      <div className="text-sm font-semibold text-zinc-900 dark:text-white">×{c.weight}</div>
+                      <div className="text-sm font-semibold text-zinc-900 dark:text-white">×{c.contribution_weight}</div>
                       <div className="text-xs text-zinc-400">weight</div>
                     </div>
                   </div>

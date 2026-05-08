@@ -44,7 +44,7 @@ export default function DashboardPage() {
 
         if (!meRes.ok) {
           window.location.href = '/login';
-          return;
+          return; // keep loading=true — no blank flash while browser navigates
         }
 
         const meJson = await meRes.json();
@@ -59,8 +59,10 @@ export default function DashboardPage() {
           const c = await contribRes.json();
           setContributions(c.total ?? 0);
         }
-      } finally {
+
         setLoading(false);
+      } catch {
+        window.location.href = '/login';
       }
     }
     load();

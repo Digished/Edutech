@@ -5,9 +5,10 @@ import Link from 'next/link';
 
 interface Upload {
   id: string;
-  file_name: string;
+  original_name: string | null;
   file_type: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  processed: boolean;
+  processing_error: string | null;
   questions_extracted: number;
   created_at: string;
   courses: { name: string; code: string | null } | null;
@@ -101,15 +102,11 @@ export default function UploadsPage() {
 
   const totalPages = Math.ceil(total / limit);
 
-  const statusBadge = (status: Upload['status']) => {
-    const map: Record<string, string> = {
-      pending: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400',
-      processing: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400',
-      completed: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400',
-      failed: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
-    };
-    return map[status] ?? 'bg-zinc-100 text-zinc-600';
-  };
+  function getUploadStatus(u: Upload): { label: string; cls: string } {
+    if (u.processing_error) return { label: 'Failed', cls: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' };
+    if (u.processed) return { label: 'Completed', cls: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' };
+    return { label: 'Processing', cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400' };
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -226,16 +223,18 @@ export default function UploadsPage() {
               {uploads.map((u) => (
                 <div key={u.id} className="px-5 py-4 flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="text-sm text-zinc-900 dark:text-white font-medium truncate">{u.file_name}</div>
+                    <div className="text-sm text-zinc-900 dark:text-white font-medium truncate">{u.original_name ?? 'Unnamed file'}</div>
                     <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
                       <span>{new Date(u.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                       {u.courses && <span>· {u.courses.name}{u.courses.code ? ` (${u.courses.code})` : ''}</span>}
                       {u.questions_extracted > 0 && <span>· {u.questions_extracted} questions extracted</span>}
                     </div>
                   </div>
-                  <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium capitalize ${statusBadge(u.status)}`}>
-                    {u.status}
-                  </span>
+                  {(() => { const s = getUploadStatus(u); return (
+                    <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${s.cls}`}>
+                      {s.label}
+                    </span>
+                  ); })()}
                 </div>
               ))}
             </div>
