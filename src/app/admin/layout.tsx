@@ -29,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const nav = [
     { href: '/admin/questions', label: 'Questions' },
+    { href: '/admin/withdrawals', label: 'Payouts' },
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/universities', label: 'Universities' },
     { href: '/admin/departments', label: 'Departments' },
@@ -63,8 +64,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               ))}
             </div>
           </div>
-          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors">
-            ← Dashboard
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+            Dashboard
           </Link>
         </div>
       </nav>

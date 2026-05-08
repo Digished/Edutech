@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ArrowLeftIcon, CheckIcon, XIcon } from '@/components/icons';
+import RevenueExplainer from '@/components/RevenueExplainer';
+import SearchSelect from '@/components/SearchSelect';
 
 interface LedgerEntry {
   id: string;
@@ -35,6 +38,8 @@ export default function WalletPage() {
   const [withdrawError, setWithdrawError] = useState('');
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+  const [resolveStatus, setResolveStatus] = useState<'idle' | 'resolving' | 'ok' | 'error'>('idle');
+  const [resolveError, setResolveError] = useState('');
 
   const limit = 20;
 
@@ -99,6 +104,42 @@ export default function WalletPage() {
     }
   }
 
+  // Auto-resolve the bank account name once the user has selected a bank
+  // and entered a 10-digit account number.
+  useEffect(() => {
+    const { bank_code, account_number } = withdrawForm;
+    if (!bank_code || !/^\d{10}$/.test(account_number)) {
+      setResolveStatus('idle');
+      setResolveError('');
+      return;
+    }
+    let cancelled = false;
+    setResolveStatus('resolving');
+    setResolveError('');
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/wallet/resolve-account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bank_code, account_number }),
+        });
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setResolveStatus('error');
+          setResolveError(json.error ?? 'Could not verify account');
+          setWithdrawForm((f) => ({ ...f, account_name: '' }));
+          return;
+        }
+        setResolveStatus('ok');
+        setWithdrawForm((f) => ({ ...f, account_name: json.data.account_name }));
+      } catch {
+        if (!cancelled) { setResolveStatus('error'); setResolveError('Network error'); }
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [withdrawForm.bank_code, withdrawForm.account_number]);
+
   const totalPages = wallet ? Math.ceil(wallet.ledger.total / limit) : 1;
 
   return (
@@ -107,7 +148,7 @@ export default function WalletPage() {
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors">
-              ← Dashboard
+<span className="inline-flex items-center gap-1.5"><ArrowLeftIcon size={14} /> Dashboard</span>
             </Link>
             <span className="text-zinc-300 dark:text-zinc-700">|</span>
             <Link href="/" className="flex items-center gap-2">
@@ -149,12 +190,16 @@ export default function WalletPage() {
           </div>
         ) : wallet ? (
           <>
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 mb-6">
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 mb-4">
               <div className="text-xs text-zinc-400 uppercase tracking-wide mb-1">Available Balance</div>
               <div className="text-3xl font-bold text-zinc-900 dark:text-white">
                 ₦{wallet.balance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
               </div>
               <div className="text-xs text-zinc-400 mt-1">{wallet.ledger.total} total transactions</div>
+            </div>
+
+            <div className="mb-6">
+              <RevenueExplainer />
             </div>
 
             <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -252,17 +297,13 @@ export default function WalletPage() {
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
                   Bank <span className="text-red-500">*</span>
                 </label>
-                <select
-                  required
+                <SearchSelect
+                  options={banks.map((b) => ({ value: b.code, label: b.name }))}
                   value={withdrawForm.bank_code}
-                  onChange={(e) => setWithdrawForm((f) => ({ ...f, bank_code: e.target.value }))}
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="">Select a bank…</option>
-                  {banks.map((b) => (
-                    <option key={b.code} value={b.code}>{b.name}</option>
-                  ))}
-                </select>
+                  onChange={(v) => setWithdrawForm((f) => ({ ...f, bank_code: v, account_name: '' }))}
+                  placeholder="Search banks…"
+                  emptyText="No matching banks"
+                />
               </div>
 
               <div>
@@ -272,10 +313,11 @@ export default function WalletPage() {
                 <input
                   type="text"
                   required
+                  inputMode="numeric"
                   pattern="[0-9]{10}"
                   maxLength={10}
                   value={withdrawForm.account_number}
-                  onChange={(e) => setWithdrawForm((f) => ({ ...f, account_number: e.target.value }))}
+                  onChange={(e) => setWithdrawForm((f) => ({ ...f, account_number: e.target.value.replace(/\D/g, '').slice(0, 10), account_name: '' }))}
                   placeholder="10-digit account number"
                   className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
@@ -283,16 +325,27 @@ export default function WalletPage() {
 
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Account name <span className="text-red-500">*</span>
+                  Account name <span className="text-zinc-400 font-normal">(verified automatically)</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={withdrawForm.account_name}
-                  onChange={(e) => setWithdrawForm((f) => ({ ...f, account_name: e.target.value }))}
-                  placeholder="As it appears on the account"
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
+                <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm ${
+                  resolveStatus === 'ok'
+                    ? 'border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/40 text-green-800 dark:text-green-300'
+                    : resolveStatus === 'error'
+                    ? 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40 text-red-700 dark:text-red-400'
+                    : 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400'
+                }`}>
+                  {resolveStatus === 'resolving' && (
+                    <span className="inline-block w-3 h-3 border-2 border-zinc-300 border-t-green-600 rounded-full animate-spin" />
+                  )}
+                  {resolveStatus === 'ok' && <CheckIcon size={14} />}
+                  {resolveStatus === 'error' && <XIcon size={14} />}
+                  <span className="truncate">
+                    {resolveStatus === 'ok' && (withdrawForm.account_name || 'Verified')}
+                    {resolveStatus === 'resolving' && 'Looking up account…'}
+                    {resolveStatus === 'error' && (resolveError || 'Could not verify')}
+                    {resolveStatus === 'idle' && 'Pick a bank and enter your 10-digit account number'}
+                  </span>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-1">
@@ -305,8 +358,8 @@ export default function WalletPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={withdrawLoading}
-                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
+                  disabled={withdrawLoading || resolveStatus !== 'ok'}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
                 >
                   {withdrawLoading ? 'Processing…' : 'Withdraw'}
                 </button>

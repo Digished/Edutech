@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
+import { ArrowLeftIcon, ArrowRightIcon } from '@/components/icons';
 
 interface Extraction {
   id: string;
@@ -100,8 +101,8 @@ export default function ReviewExtractionsPage({
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/dashboard/uploads" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
-            ← Uploads
+          <Link href="/dashboard/uploads" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+            <ArrowLeftIcon size={14} /> Uploads
           </Link>
           <span className="text-zinc-300 dark:text-zinc-700">|</span>
           <Link href="/" className="flex items-center gap-2">
@@ -132,7 +133,7 @@ export default function ReviewExtractionsPage({
           <div className="mb-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm px-4 py-3 rounded-lg">
             Published {done.published} question{done.published === 1 ? '' : 's'}.
             {done.skipped ? ` ${done.skipped} skipped.` : ''}{' '}
-            <Link href="/questions" className="underline font-medium">View question bank →</Link>
+            <Link href="/questions" className="underline font-medium inline-flex items-center gap-1">View question bank <ArrowRightIcon size={12} /></Link>
           </div>
         )}
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
+import { ArrowLeftIcon, CheckIcon, FlagIcon, PinIcon, XIcon, ChevronUpIcon } from '@/components/icons';
 
 interface Question {
   id: string;
@@ -212,8 +213,8 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/questions" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
-            ← Question bank
+          <Link href="/questions" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+            <ArrowLeftIcon size={14} /> Question bank
           </Link>
         </div>
       </nav>
@@ -224,9 +225,9 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
             <button
               type="button"
               onClick={() => setFlagOpen(true)}
-              className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+              className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400 hover:underline"
             >
-              🚩 Flag this question
+              <FlagIcon size={12} /> Flag this question
             </button>
           </div>
           <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -303,7 +304,9 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
               </button>
               {attempt && question.question_type === 'mcq' && attempt.is_correct !== null && (
                 <span className={`text-xs font-medium ${attempt.is_correct ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {attempt.is_correct ? '✓ Correct' : `✗ Incorrect${question.correct_answer ? ` — correct answer is ${question.correct_answer}` : ''}`}
+                  <span className="inline-flex items-center gap-1">
+                    {attempt.is_correct ? <><CheckIcon size={14} /> Correct</> : <><XIcon size={14} /> Incorrect{question.correct_answer ? ` — correct answer is ${question.correct_answer}` : ''}</>}
+                  </span>
                 </span>
               )}
               {attempt && question.question_type === 'theory' && (
@@ -344,7 +347,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
                         : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-green-300'
                     }`}
                   >
-                    <span aria-hidden>▲</span>
+                    <ChevronUpIcon size={14} />
                     <span className="mt-0.5">{c.upvote_count}</span>
                   </button>
                   <div className="flex-1 min-w-0">
@@ -352,8 +355,8 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{c.author}</span>
                         {c.pinned && (
-                          <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                            📌 Pinned
+                          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                            <PinIcon size={10} /> Pinned
                           </span>
                         )}
                       </div>
