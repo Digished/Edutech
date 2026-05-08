@@ -32,6 +32,7 @@ export default function DashboardPage() {
   const [wallet, setWallet] = useState<WalletData | null>(null);
   const [contributions, setContributions] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function load() {
@@ -42,12 +43,23 @@ export default function DashboardPage() {
           fetch('/api/contributions?limit=1'),
         ]);
 
-        if (!meRes.ok) {
+        if (meRes.status === 401) {
           window.location.href = '/login';
           return; // keep loading=true — no blank flash while browser navigates
         }
 
+        if (!meRes.ok) {
+          setError('Could not load your profile. Please check your Supabase database setup.');
+          setLoading(false);
+          return;
+        }
+
         const meJson = await meRes.json();
+        if (!meJson.data) {
+          setError('Profile not found. Your account may not be fully set up.');
+          setLoading(false);
+          return;
+        }
         setUser(meJson.data);
 
         if (walletRes.ok) {
@@ -62,7 +74,8 @@ export default function DashboardPage() {
 
         setLoading(false);
       } catch {
-        window.location.href = '/login';
+        setError('Something went wrong loading your dashboard.');
+        setLoading(false);
       }
     }
     load();
@@ -77,6 +90,21 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
         <div className="text-zinc-400 text-sm">Loading…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center p-6">
+        <div className="max-w-sm text-center">
+          <div className="text-3xl mb-3">⚠️</div>
+          <p className="font-medium text-zinc-900 dark:text-white mb-1">Dashboard unavailable</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{error}</p>
+          <button onClick={() => window.location.reload()} className="mt-4 text-sm text-green-600 hover:text-green-700">
+            Try again
+          </button>
+        </div>
       </div>
     );
   }
