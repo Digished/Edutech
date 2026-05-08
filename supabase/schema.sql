@@ -478,6 +478,10 @@ GRANT SELECT                        ON public.question_duplicates    TO authenti
 -- Service role gets full access (used by admin client, bypasses RLS)
 GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
 
+-- Functions need explicit EXECUTE grants
+GRANT EXECUTE ON FUNCTION public.get_wallet_balance(UUID)         TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.increment_question_views(UUID)   TO authenticated, anon, service_role;
+
 -- ============================================================
 -- STORAGE BUCKETS (run via Supabase dashboard or migration)
 -- ============================================================

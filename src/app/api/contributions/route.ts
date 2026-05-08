@@ -32,9 +32,13 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false })
       .range(from, to);
 
-    if (dbError) return serverError(dbError.message);
+    if (dbError) {
+      console.error('[contributions] query error:', dbError);
+      return serverError(`contributions: ${dbError.message}`);
+    }
     return paginated(data ?? [], count ?? 0, page, limit);
-  } catch {
-    return serverError();
+  } catch (e) {
+    console.error('[contributions] unexpected error:', e);
+    return serverError(e instanceof Error ? e.message : 'unknown error');
   }
 }
