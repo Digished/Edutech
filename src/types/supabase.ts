@@ -130,6 +130,7 @@ export interface Database {
           options: Json | null;
           correct_answer: string | null;
           year: number | null;
+          question_type: 'mcq' | 'theory';
           source_type: 'uploaded' | 'manual' | 'extracted';
           status: 'pending' | 'approved' | 'rejected';
           is_deleted: boolean;
@@ -144,6 +145,7 @@ export interface Database {
           options?: Json | null;
           correct_answer?: string | null;
           year?: number | null;
+          question_type?: 'mcq' | 'theory';
           source_type?: 'uploaded' | 'manual' | 'extracted';
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
@@ -157,6 +159,7 @@ export interface Database {
           options?: Json | null;
           correct_answer?: string | null;
           year?: number | null;
+          question_type?: 'mcq' | 'theory';
           source_type?: 'uploaded' | 'manual' | 'extracted';
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
@@ -202,6 +205,8 @@ export interface Database {
           processed: boolean;
           processing_error: string | null;
           questions_extracted: number;
+          progress: number;
+          processing_stage: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -216,6 +221,8 @@ export interface Database {
           processed?: boolean;
           processing_error?: string | null;
           questions_extracted?: number;
+          progress?: number;
+          processing_stage?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -223,6 +230,8 @@ export interface Database {
           processed?: boolean;
           processing_error?: string | null;
           questions_extracted?: number;
+          progress?: number;
+          processing_stage?: string | null;
           updated_at?: string;
         };
         Relationships: EmptyRelationships;

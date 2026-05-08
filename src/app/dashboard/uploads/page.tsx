@@ -10,6 +10,8 @@ interface Upload {
   processed: boolean;
   processing_error: string | null;
   questions_extracted: number;
+  progress: number;
+  processing_stage: string | null;
   created_at: string;
   courses: { name: string; code: string | null } | null;
 }
@@ -73,6 +75,35 @@ export default function UploadsPage() {
 
   useEffect(() => { loadUploads(page); }, [page]);
   useEffect(() => { loadCourses(); }, []);
+
+  // Poll any in-flight uploads (not yet processed) until they complete or fail.
+  const inflightKey = uploads
+    .filter((u) => !u.processed && !u.processing_error)
+    .map((u) => u.id)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (!inflightKey) return;
+    const ids = inflightKey.split(',');
+    const interval = setInterval(async () => {
+      const updates = await Promise.all(
+        ids.map(async (id) => {
+          const res = await fetch(`/api/uploads/${id}`);
+          if (!res.ok) return null;
+          const json = await res.json();
+          return json.data as Upload | null;
+        }),
+      );
+      setUploads((prev) =>
+        prev.map((u) => {
+          const fresh = updates.find((x) => x?.id === u.id);
+          return fresh ? { ...u, ...fresh } : u;
+        }),
+      );
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [inflightKey]);
 
   useEffect(() => {
     fetch('/api/universities').then(async (r) => {
@@ -355,22 +386,41 @@ export default function UploadsPage() {
             <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
               {uploads.map((u) => {
                 const s = getUploadStatus(u);
+                const inProgress = !u.processed && !u.processing_error;
+                const pct = Math.max(0, Math.min(100, u.progress ?? 0));
                 return (
-                  <div key={u.id} className="px-5 py-4 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="text-sm text-zinc-900 dark:text-white font-medium truncate">
-                        {u.original_name ?? 'Unnamed file'}
+                  <div key={u.id} className="px-5 py-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="text-sm text-zinc-900 dark:text-white font-medium truncate">
+                          {u.original_name ?? 'Unnamed file'}
+                        </div>
+                        <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                          <span>{new Date(u.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                          {u.courses && <span>· {u.courses.name}{u.courses.code ? ` (${u.courses.code})` : ''}</span>}
+                          {u.questions_extracted > 0 && <span>· {u.questions_extracted} questions extracted</span>}
+                          {u.processing_error && <span className="text-red-400">· {u.processing_error}</span>}
+                        </div>
                       </div>
-                      <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                        <span>{new Date(u.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                        {u.courses && <span>· {u.courses.name}{u.courses.code ? ` (${u.courses.code})` : ''}</span>}
-                        {u.questions_extracted > 0 && <span>· {u.questions_extracted} questions extracted</span>}
-                        {u.processing_error && <span className="text-red-400">· {u.processing_error}</span>}
-                      </div>
+                      <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${s.cls}`}>
+                        {s.label}
+                      </span>
                     </div>
-                    <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${s.cls}`}>
-                      {s.label}
-                    </span>
+
+                    {inProgress && (
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-1">
+                          <span>{u.processing_stage ?? 'Queued'}</span>
+                          <span className="tabular-nums">{pct}%</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-green-500 transition-all duration-500 ease-out"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

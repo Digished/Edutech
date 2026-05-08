@@ -17,6 +17,7 @@ interface Question {
   options: Record<string, string> | null;
   correct_answer: string | null;
   year: number | null;
+  question_type: 'mcq' | 'theory';
   courses: Course;
   question_analytics: { views_count: number }[];
 }
@@ -157,7 +158,16 @@ export default function QuestionsPage() {
           <div className="space-y-3">
             {questions.map((q) => (
               <div key={q.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 hover:border-green-200 dark:hover:border-green-800 transition-colors">
-                <p className="text-zinc-900 dark:text-white text-sm leading-relaxed font-medium">
+                <div className="flex items-start gap-2 mb-2">
+                  <span className={`shrink-0 text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded ${
+                    q.question_type === 'theory'
+                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
+                      : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+                  }`}>
+                    {q.question_type === 'theory' ? 'Theory' : 'MCQ'}
+                  </span>
+                </div>
+                <p className="text-zinc-900 dark:text-white text-sm leading-relaxed font-medium whitespace-pre-line">
                   {q.question_text}
                 </p>
                 {q.options && (

@@ -1,13 +1,32 @@
 // ============================================================
 // Upload Processing Pipeline
-// Orchestrates: storage → OCR → question extraction → contribution logging
+// storage → OCR → question extraction → contribution logging
+// Persists progress (0–100) and stage to the uploads row.
 // ============================================================
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { extractQuestionsFromText, extractQuestionsFromImageUrl } from './processor';
+import {
+  extractQuestionsFromImageDataUrl,
+  extractQuestionsFromPdfBuffer,
+  ExtractionResult,
+} from './processor';
 import { hashQuestionText } from '@/lib/utils/hash';
 import { detectDuplicates } from '@/lib/dedup/similarity';
 import { FileType } from '@/types/database';
+
+type SupabaseAdmin = ReturnType<typeof createAdminClient>;
+
+async function setProgress(
+  supabase: SupabaseAdmin,
+  uploadId: string,
+  progress: number,
+  stage: string,
+) {
+  await supabase
+    .from('uploads')
+    .update({ progress, processing_stage: stage })
+    .eq('id', uploadId);
+}
 
 export async function processUpload(uploadId: string): Promise<void> {
   const supabase = createAdminClient();
@@ -22,40 +41,56 @@ export async function processUpload(uploadId: string): Promise<void> {
   if (upload.processed) return;
 
   try {
-    let extractionResult;
+    await setProgress(supabase, uploadId, 5, 'Fetching file');
 
+    const { data: signed } = await supabase.storage
+      .from('exam-uploads')
+      .createSignedUrl(upload.file_url, 600);
+    if (!signed?.signedUrl) throw new Error('Could not generate signed URL');
+
+    await setProgress(supabase, uploadId, 15, 'Downloading file');
+    const fileResp = await fetch(signed.signedUrl);
+    if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);
+    const fileBuffer = await fileResp.arrayBuffer();
+
+    await setProgress(supabase, uploadId, 30, 'Reading questions with AI');
+
+    let extractionResult: ExtractionResult;
     if ((upload.file_type as FileType) === 'image') {
-      // Generate signed URL for the image
-      const { data: signedUrl } = await supabase.storage
-        .from('exam-uploads')
-        .createSignedUrl(upload.file_url, 300);
-
-      if (!signedUrl?.signedUrl) throw new Error('Could not generate signed URL');
-      extractionResult = await extractQuestionsFromImageUrl(signedUrl.signedUrl);
+      const mime = upload.original_name?.toLowerCase().endsWith('.png')
+        ? 'image/png'
+        : upload.original_name?.toLowerCase().endsWith('.webp')
+        ? 'image/webp'
+        : 'image/jpeg';
+      const base64 = Buffer.from(fileBuffer).toString('base64');
+      extractionResult = await extractQuestionsFromImageDataUrl(`data:${mime};base64,${base64}`);
     } else {
-      // For PDF: download and pass text content
-      // In production, integrate a PDF-to-text service (e.g., pdf-parse, Adobe PDF Extract)
-      const { data: signedUrl } = await supabase.storage
-        .from('exam-uploads')
-        .createSignedUrl(upload.file_url, 300);
-
-      if (!signedUrl?.signedUrl) throw new Error('Could not generate signed URL');
-
-      // Pass the URL to the AI for extraction (GPT-4o can handle PDF content via URL)
-      extractionResult = await extractQuestionsFromImageUrl(signedUrl.signedUrl);
+      extractionResult = await extractQuestionsFromPdfBuffer(
+        fileBuffer,
+        upload.original_name ?? 'paper.pdf',
+      );
     }
 
     if (extractionResult.error && extractionResult.questions.length === 0) {
       await supabase
         .from('uploads')
-        .update({ processed: true, processing_error: extractionResult.error })
+        .update({
+          processed: true,
+          processing_error: extractionResult.error,
+          progress: 100,
+          processing_stage: 'Failed',
+        })
         .eq('id', uploadId);
       return;
     }
 
-    let questionsExtracted = 0;
+    await setProgress(supabase, uploadId, 70, 'Saving questions');
 
-    for (const eq of extractionResult.questions) {
+    let questionsExtracted = 0;
+    const total = extractionResult.questions.length || 1;
+
+    for (let i = 0; i < extractionResult.questions.length; i++) {
+      const eq = extractionResult.questions[i];
       if (!eq.question_text?.trim()) continue;
 
       const content_hash = hashQuestionText(eq.question_text);
@@ -65,6 +100,7 @@ export async function processUpload(uploadId: string): Promise<void> {
         .insert({
           course_id: upload.course_id,
           question_text: eq.question_text,
+          question_type: eq.question_type,
           options: eq.options ?? null,
           correct_answer: eq.correct_answer ?? null,
           year: eq.year ?? null,
@@ -75,7 +111,7 @@ export async function processUpload(uploadId: string): Promise<void> {
         .select()
         .single();
 
-      if (qError) continue;
+      if (qError || !question) continue;
 
       await supabase.from('question_contributions').insert({
         question_id: question.id,
@@ -86,14 +122,21 @@ export async function processUpload(uploadId: string): Promise<void> {
 
       detectDuplicates(question.id, eq.question_text, upload.course_id).catch(() => null);
       questionsExtracted++;
+
+      const pct = 70 + Math.floor((25 * (i + 1)) / total);
+      await setProgress(supabase, uploadId, pct, `Saved ${questionsExtracted}/${total} questions`);
     }
 
     await supabase
       .from('uploads')
-      .update({ processed: true, questions_extracted: questionsExtracted })
+      .update({
+        processed: true,
+        questions_extracted: questionsExtracted,
+        progress: 100,
+        processing_stage: 'Completed',
+      })
       .eq('id', uploadId);
 
-    // Notify uploader
     await supabase.from('notifications').insert({
       user_id: upload.user_id,
       title: 'Upload Processed',
@@ -105,7 +148,12 @@ export async function processUpload(uploadId: string): Promise<void> {
     const message = err instanceof Error ? err.message : 'Processing failed';
     await supabase
       .from('uploads')
-      .update({ processed: true, processing_error: message })
+      .update({
+        processed: true,
+        processing_error: message,
+        progress: 100,
+        processing_stage: 'Failed',
+      })
       .eq('id', uploadId);
     throw err;
   }
