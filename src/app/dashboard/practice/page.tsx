@@ -18,6 +18,7 @@ export default function PracticeSetupPage() {
   const [courseId, setCourseId] = useState('');
   const [count, setCount] = useState(10);
   const [school, setSchool] = useState('');
+  const [reveal, setReveal] = useState<'after_each' | 'at_end'>('at_end');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -54,6 +55,7 @@ export default function PracticeSetupPage() {
         answers: {} as Record<string, string>,
         startedAt: Date.now(),
         courseId: courseId || null,
+        reveal,
       };
       sessionStorage.setItem('practice_session', JSON.stringify(session));
       router.push('/dashboard/practice/run?i=0');
@@ -123,6 +125,30 @@ export default function PracticeSetupPage() {
               onChange={(e) => setCount(parseInt(e.target.value || '0'))}
               className="w-32 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">When to show answers</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {([
+                { value: 'after_each', title: 'After each question', desc: 'See if you got it right immediately (MCQs only).' },
+                { value: 'at_end', title: 'At the end', desc: 'Sit it like a real exam — review answers and score after finishing.' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setReveal(opt.value)}
+                  className={`text-left px-4 py-3 rounded-lg border transition-colors ${
+                    reveal === opt.value
+                      ? 'border-green-400 bg-green-50 dark:border-green-700 dark:bg-green-950/40'
+                      : 'border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <div className="text-sm font-medium text-zinc-900 dark:text-white">{opt.title}</div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
           </div>
 
           <button

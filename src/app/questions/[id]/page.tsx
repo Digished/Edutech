@@ -25,9 +25,21 @@ interface Comment {
   id: string;
   body: string;
   is_anonymous: boolean;
+  pinned: boolean;
+  upvote_count: number;
+  has_upvoted: boolean;
+  can_pin: boolean;
   author: string;
   is_mine: boolean;
   created_at: string;
+}
+
+function sortComments(list: Comment[]): Comment[] {
+  return [...list].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    if (a.upvote_count !== b.upvote_count) return b.upvote_count - a.upvote_count;
+    return a.created_at.localeCompare(b.created_at);
+  });
 }
 
 export default function QuestionDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -74,7 +86,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
         if (qJson.data?.question_type === 'mcq') setPickedOption(a.answer);
         else setTheoryAnswer(a.answer);
       }
-      setComments(cJson.data ?? []);
+      setComments(sortComments(cJson.data ?? []));
     } finally {
       setLoading(false);
     }
@@ -113,7 +125,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
       });
       const json = await res.json();
       if (res.ok) {
-        setComments((prev) => [...prev, json.data]);
+        setComments((prev) => sortComments([...prev, json.data]));
         setCommentBody('');
       }
     } finally {
@@ -137,6 +149,40 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
       setTimeout(() => { setFlagOpen(false); setFlagDone(false); }, 1200);
     } finally {
       setFlagging(false);
+    }
+  }
+
+  async function toggleUpvote(commentId: string) {
+    setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? {
+      ...c,
+      has_upvoted: !c.has_upvoted,
+      upvote_count: c.upvote_count + (c.has_upvoted ? -1 : 1),
+    } : c)));
+    const res = await fetch(`/api/questions/${id}/comments/${commentId}/upvote`, { method: 'POST' });
+    if (!res.ok) {
+      // Revert on error.
+      setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? {
+        ...c,
+        has_upvoted: !c.has_upvoted,
+        upvote_count: c.upvote_count + (c.has_upvoted ? -1 : 1),
+      } : c)));
+      return;
+    }
+    const json = await res.json();
+    if (json.data) {
+      setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? {
+        ...c,
+        has_upvoted: json.data.upvoted,
+        upvote_count: json.data.upvote_count,
+      } : c)));
+    }
+  }
+
+  async function togglePin(commentId: string, currentlyPinned: boolean) {
+    setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? { ...c, pinned: !currentlyPinned } : c)));
+    const res = await fetch(`/api/questions/${id}/comments/${commentId}/pin`, { method: 'POST' });
+    if (!res.ok) {
+      setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? { ...c, pinned: currentlyPinned } : c)));
     }
   }
 
@@ -269,28 +315,67 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
 
         {/* Comments */}
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">
-            Discussion ({comments.length})
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-1">
+            Answers & discussion ({comments.length})
           </h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+            Upvote answers you find helpful. Pinned answers appear at the top.
+          </p>
 
           {comments.length === 0 ? (
             <p className="text-sm text-zinc-400">Be the first to share an explanation or alternative answer.</p>
           ) : (
             <div className="space-y-3">
               {comments.map((c) => (
-                <div key={c.id} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-4 py-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{c.author}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-zinc-400">{new Date(c.created_at).toLocaleString()}</span>
-                      {c.is_mine && (
-                        <button onClick={() => deleteComment(c.id)} className="text-xs text-zinc-400 hover:text-red-600">
-                          Delete
-                        </button>
-                      )}
+                <div
+                  key={c.id}
+                  className={`flex gap-3 rounded-lg px-4 py-3 border ${
+                    c.pinned
+                      ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900'
+                      : 'bg-zinc-50 dark:bg-zinc-800/50 border-transparent'
+                  }`}
+                >
+                  <button
+                    onClick={() => toggleUpvote(c.id)}
+                    aria-label={c.has_upvoted ? 'Remove upvote' : 'Upvote answer'}
+                    className={`flex flex-col items-center justify-start shrink-0 w-10 rounded-md py-1 text-xs font-semibold transition-colors ${
+                      c.has_upvoted
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:border-green-300'
+                    }`}
+                  >
+                    <span aria-hidden>▲</span>
+                    <span className="mt-0.5">{c.upvote_count}</span>
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{c.author}</span>
+                        {c.pinned && (
+                          <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
+                            📌 Pinned
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-zinc-400">{new Date(c.created_at).toLocaleString()}</span>
+                        {c.can_pin && (
+                          <button
+                            onClick={() => togglePin(c.id, c.pinned)}
+                            className="text-xs text-amber-700 dark:text-amber-400 hover:underline"
+                          >
+                            {c.pinned ? 'Unpin' : 'Pin'}
+                          </button>
+                        )}
+                        {c.is_mine && (
+                          <button onClick={() => deleteComment(c.id)} className="text-xs text-zinc-400 hover:text-red-600">
+                            Delete
+                          </button>
+                        )}
+                      </div>
                     </div>
+                    <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-line">{c.body}</p>
                   </div>
-                  <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-line">{c.body}</p>
                 </div>
               ))}
             </div>

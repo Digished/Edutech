@@ -324,6 +324,7 @@ export interface Database {
           body: string;
           is_anonymous: boolean;
           is_hidden: boolean;
+          pinned: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -334,6 +335,7 @@ export interface Database {
           body: string;
           is_anonymous?: boolean;
           is_hidden?: boolean;
+          pinned?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -341,7 +343,24 @@ export interface Database {
           body?: string;
           is_anonymous?: boolean;
           is_hidden?: boolean;
+          pinned?: boolean;
           updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      comment_upvotes: {
+        Row: {
+          comment_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          comment_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          created_at?: string;
         };
         Relationships: EmptyRelationships;
       };

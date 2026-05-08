@@ -303,6 +303,22 @@ function ExtractionCard({
         className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
       />
 
+      {ext.question_type === 'theory' && (
+        <div className="mt-3">
+          <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+            Suggested answer (optional — shown to students who attempt this question)
+          </label>
+          <textarea
+            value={ext.correct_answer ?? ''}
+            onChange={(e) => onPatchLocal({ correct_answer: e.target.value })}
+            onBlur={(e) => onSave({ correct_answer: e.target.value || null })}
+            rows={4}
+            placeholder="Write the model answer or marking guide. Leave blank if you only have the question."
+            className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
+      )}
+
       {ext.question_type === 'mcq' && (
         <div className="mt-3 space-y-2">
           {optKeys.map((k) => (
