@@ -5,8 +5,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
 import { created, badRequest, unauthorized, serverError, paginated } from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
-import { processUpload } from '@/lib/ocr/pipeline';
-
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 // GET /api/uploads — own uploads
@@ -111,13 +109,7 @@ export async function POST(req: NextRequest) {
 
     if (dbError) return serverError(dbError.message);
 
-    // Trigger async processing (non-blocking on Vercel via background tasks)
-    // In production, use a queue (e.g., Vercel Cron + Supabase Edge Function)
-    processUpload(upload.id).catch((err) => {
-      console.error(`Upload processing failed for ${upload.id}:`, err);
-    });
-
-    return created(upload, 'File uploaded. Processing started.');
+    return created(upload, 'File uploaded. Call /api/uploads/[id]/process to start extraction.');
   } catch {
     return serverError();
   }

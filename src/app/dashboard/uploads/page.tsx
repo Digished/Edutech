@@ -164,6 +164,12 @@ export default function UploadsPage() {
         setUploadError(json.error ?? 'Upload failed');
         return;
       }
+      const newUpload = json.data as { id: string };
+
+      // Kick off OCR on the long-timeout processing route. Don't await — polling
+      // will track progress and the request runs to completion server-side.
+      fetch(`/api/uploads/${newUpload.id}/process`, { method: 'POST' }).catch(() => null);
+
       setUploadSuccess('File uploaded successfully. Questions will be extracted shortly.');
       setSelectedFile(null);
       setSelectedCourse('');
@@ -388,6 +394,7 @@ export default function UploadsPage() {
                 const s = getUploadStatus(u);
                 const inProgress = !u.processed && !u.processing_error;
                 const pct = Math.max(0, Math.min(100, u.progress ?? 0));
+                const canRetry = !inProgress && (u.processing_error || u.questions_extracted === 0);
                 return (
                   <div key={u.id} className="px-5 py-4">
                     <div className="flex items-center justify-between gap-4">
@@ -402,9 +409,24 @@ export default function UploadsPage() {
                           {u.processing_error && <span className="text-red-400">· {u.processing_error}</span>}
                         </div>
                       </div>
-                      <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${s.cls}`}>
-                        {s.label}
-                      </span>
+                      <div className="shrink-0 flex items-center gap-2">
+                        {canRetry && (
+                          <button
+                            onClick={async () => {
+                              setUploads((prev) => prev.map((x) => x.id === u.id
+                                ? { ...x, processed: false, processing_error: null, progress: 0, processing_stage: 'Retrying' }
+                                : x));
+                              await fetch(`/api/uploads/${u.id}/process`, { method: 'POST' }).catch(() => null);
+                            }}
+                            className="px-2 py-1 rounded text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                          >
+                            Retry
+                          </button>
+                        )}
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${s.cls}`}>
+                          {s.label}
+                        </span>
+                      </div>
                     </div>
 
                     {inProgress && (

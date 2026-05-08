@@ -6,7 +6,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
-  extractQuestionsFromImageDataUrl,
+  extractQuestionsFromImageUrl,
   extractQuestionsFromPdfBuffer,
   ExtractionResult,
 } from './processor';
@@ -41,30 +41,24 @@ export async function processUpload(uploadId: string): Promise<void> {
   if (upload.processed) return;
 
   try {
-    await setProgress(supabase, uploadId, 5, 'Fetching file');
+    await setProgress(supabase, uploadId, 10, 'Preparing file');
 
     const { data: signed } = await supabase.storage
       .from('exam-uploads')
       .createSignedUrl(upload.file_url, 600);
     if (!signed?.signedUrl) throw new Error('Could not generate signed URL');
 
-    await setProgress(supabase, uploadId, 15, 'Downloading file');
-    const fileResp = await fetch(signed.signedUrl);
-    if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);
-    const fileBuffer = await fileResp.arrayBuffer();
-
-    await setProgress(supabase, uploadId, 30, 'Reading questions with AI');
+    await setProgress(supabase, uploadId, 25, 'Reading questions with AI');
 
     let extractionResult: ExtractionResult;
     if ((upload.file_type as FileType) === 'image') {
-      const mime = upload.original_name?.toLowerCase().endsWith('.png')
-        ? 'image/png'
-        : upload.original_name?.toLowerCase().endsWith('.webp')
-        ? 'image/webp'
-        : 'image/jpeg';
-      const base64 = Buffer.from(fileBuffer).toString('base64');
-      extractionResult = await extractQuestionsFromImageDataUrl(`data:${mime};base64,${base64}`);
+      // Hand the signed URL straight to OpenAI — no base64 round-trip.
+      extractionResult = await extractQuestionsFromImageUrl(signed.signedUrl);
     } else {
+      // GPT-4o needs PDFs via the Files API; download once, upload to OpenAI.
+      const fileResp = await fetch(signed.signedUrl);
+      if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);
+      const fileBuffer = await fileResp.arrayBuffer();
       extractionResult = await extractQuestionsFromPdfBuffer(
         fileBuffer,
         upload.original_name ?? 'paper.pdf',

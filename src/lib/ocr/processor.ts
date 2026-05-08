@@ -86,8 +86,8 @@ function parseQuestions(content: string | null | undefined, finishReason?: strin
   }
 }
 
-export async function extractQuestionsFromImageDataUrl(
-  imageDataUrl: string,
+export async function extractQuestionsFromImageUrl(
+  imageUrl: string,
 ): Promise<ExtractionResult> {
   try {
     const openai = client();
@@ -99,7 +99,7 @@ export async function extractQuestionsFromImageDataUrl(
           role: 'user',
           content: [
             { type: 'text', text: 'Extract all exam questions (MCQ and theory) from this image:' },
-            { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } },
+            { type: 'image_url', image_url: { url: imageUrl, detail: 'auto' } },
           ],
         },
       ],
@@ -115,6 +115,9 @@ export async function extractQuestionsFromImageDataUrl(
     return { questions: [], error: message };
   }
 }
+
+// Backwards-compat alias.
+export const extractQuestionsFromImageDataUrl = extractQuestionsFromImageUrl;
 
 export async function extractQuestionsFromPdfBuffer(
   buffer: ArrayBuffer,
@@ -161,11 +164,6 @@ export async function extractQuestionsFromPdfBuffer(
     const message = err instanceof Error ? err.message : 'Extraction failed';
     return { questions: [], error: message };
   }
-}
-
-// Backwards-compat wrappers (kept so any older imports keep working).
-export async function extractQuestionsFromImageUrl(imageUrl: string): Promise<ExtractionResult> {
-  return extractQuestionsFromImageDataUrl(imageUrl);
 }
 
 export async function extractQuestionsFromText(text: string): Promise<ExtractionResult> {
