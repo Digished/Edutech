@@ -1,65 +1,198 @@
-import Image from "next/image";
-
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
+    <div className="min-h-screen bg-white dark:bg-zinc-950 font-sans">
+      {/* Nav */}
+      <nav className="border-b border-zinc-100 dark:border-zinc-800">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center">
+              <span className="text-white font-bold text-sm">E</span>
+            </div>
+            <span className="font-semibold text-zinc-900 dark:text-white text-lg">EduTech</span>
+          </div>
+          <div className="hidden sm:flex items-center gap-6 text-sm text-zinc-500 dark:text-zinc-400">
+            <a href="#features" className="hover:text-zinc-900 dark:hover:text-white transition-colors">Features</a>
+            <a href="#how-it-works" className="hover:text-zinc-900 dark:hover:text-white transition-colors">How it works</a>
+            <a href="#earn" className="hover:text-zinc-900 dark:hover:text-white transition-colors">Earn</a>
+          </div>
+          <div className="flex items-center gap-3">
             <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              href="/login"
+              className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors px-3 py-2"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
+              Log in
+            </a>
             <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              href="/register"
+              className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
-              Learning
-            </a>{" "}
-            center.
+              Get started
+            </a>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero */}
+      <section className="max-w-6xl mx-auto px-6 pt-20 pb-16 text-center">
+        <div className="inline-flex items-center gap-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-xs font-medium px-3 py-1.5 rounded-full mb-6">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+          Built for Nigerian university students
+        </div>
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-zinc-900 dark:text-white leading-tight tracking-tight max-w-3xl mx-auto">
+          Study smarter with a{" "}
+          <span className="text-green-600">crowdsourced</span>{" "}
+          exam question bank
+        </h1>
+        <p className="mt-6 text-lg text-zinc-500 dark:text-zinc-400 max-w-xl mx-auto leading-relaxed">
+          Access thousands of past questions by school, department, and course.
+          Upload your exam papers, contribute questions, and earn real money.
+        </p>
+        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          <a
+            href="/register"
+            className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-3 rounded-lg transition-colors text-sm"
+          >
+            Start for free
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </a>
+          <a
+            href="/questions"
+            className="inline-flex items-center justify-center gap-2 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 font-medium px-6 py-3 rounded-lg transition-colors text-sm"
+          >
+            Browse questions
+          </a>
+        </div>
+
+        {/* Stats */}
+        <div className="mt-16 grid grid-cols-3 gap-6 max-w-lg mx-auto">
+          {[
+            { value: "50K+", label: "Questions" },
+            { value: "200+", label: "Courses" },
+            { value: "₦2M+", label: "Paid out" },
+          ].map((stat) => (
+            <div key={stat.label} className="text-center">
+              <div className="text-2xl font-bold text-zinc-900 dark:text-white">{stat.value}</div>
+              <div className="text-xs text-zinc-400 mt-0.5">{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" className="bg-zinc-50 dark:bg-zinc-900 py-20">
+        <div className="max-w-6xl mx-auto px-6">
+          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white text-center mb-12">
+            Everything you need to ace your exams
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[
+              {
+                icon: "📚",
+                title: "Structured question bank",
+                desc: "Browse questions filtered by school, department, course, and year. Never search through PDFs again.",
+              },
+              {
+                icon: "🤖",
+                title: "AI-powered extraction",
+                desc: "Upload a past question paper — our AI extracts and structures every question automatically.",
+              },
+              {
+                icon: "💰",
+                title: "Earn from contributions",
+                desc: "Every question you upload or contribute earns you a share of the monthly revenue pool.",
+              },
+              {
+                icon: "🔍",
+                title: "Full-text search",
+                desc: "Search across thousands of questions instantly. Find exactly what you're studying.",
+              },
+              {
+                icon: "🏦",
+                title: "Instant withdrawals",
+                desc: "Withdraw your earnings directly to any Nigerian bank account via Paystack.",
+              },
+              {
+                icon: "✅",
+                title: "Quality moderation",
+                desc: "Every question is reviewed before going live. No spam, no duplicates, no noise.",
+              },
+            ].map((f) => (
+              <div
+                key={f.title}
+                className="bg-white dark:bg-zinc-800 rounded-xl p-6 border border-zinc-100 dark:border-zinc-700"
+              >
+                <div className="text-2xl mb-3">{f.icon}</div>
+                <h3 className="font-semibold text-zinc-900 dark:text-white mb-2">{f.title}</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{f.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how-it-works" className="py-20">
+        <div className="max-w-6xl mx-auto px-6">
+          <h2 className="text-2xl font-bold text-zinc-900 dark:text-white text-center mb-12">
+            How it works
+          </h2>
+          <div className="grid sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
+            {[
+              { step: "1", title: "Create an account", desc: "Sign up free with your university email and set your school and department." },
+              { step: "2", title: "Upload or contribute", desc: "Upload a past question PDF or manually add questions to your course's bank." },
+              { step: "3", title: "Earn as others study", desc: "Each view of your questions earns you a share of the platform's revenue pool." },
+            ].map((item) => (
+              <div key={item.step} className="text-center">
+                <div className="w-10 h-10 rounded-full bg-green-600 text-white font-bold text-sm flex items-center justify-center mx-auto mb-4">
+                  {item.step}
+                </div>
+                <h3 className="font-semibold text-zinc-900 dark:text-white mb-2">{item.title}</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Earn CTA */}
+      <section id="earn" className="bg-green-600 py-16">
+        <div className="max-w-2xl mx-auto px-6 text-center">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-4">
+            Turn your past questions into income
+          </h2>
+          <p className="text-green-100 mb-8 leading-relaxed">
+            Contributors earn monthly from a shared revenue pool — distributed based on
+            how many questions you've added and how often they're viewed.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
           <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/register"
+            className="inline-flex items-center justify-center bg-white text-green-700 hover:bg-green-50 font-semibold px-6 py-3 rounded-lg transition-colors text-sm"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
+            Start contributing today
           </a>
         </div>
-      </main>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-100 dark:border-zinc-800 py-10">
+        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-green-600 flex items-center justify-center">
+              <span className="text-white font-bold text-xs">E</span>
+            </div>
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">EduTech</span>
+          </div>
+          <p className="text-xs text-zinc-400">
+            © {new Date().getFullYear()} EduTech. Built for Nigerian students.
+          </p>
+          <div className="flex items-center gap-4 text-xs text-zinc-400">
+            <a href="/api/analytics" className="hover:text-zinc-600 transition-colors">API</a>
+            <a href="mailto:support@edutech.ng" className="hover:text-zinc-600 transition-colors">Support</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
