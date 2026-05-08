@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { ok, unauthorized, serverError } from '@/lib/utils/response';
+import { ok, unauthorized, notFound, serverError } from '@/lib/utils/response';
 
 export async function GET() {
   try {
@@ -11,11 +11,13 @@ export async function GET() {
 
     if (error || !user) return unauthorized();
 
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('users')
       .select('*')
       .eq('id', user.id)
       .single();
+
+    if (profileError || !profile) return notFound('User profile not found');
 
     return ok(profile);
   } catch {

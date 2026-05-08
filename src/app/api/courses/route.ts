@@ -40,10 +40,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/courses — contributor or admin
+// POST /api/courses — any authenticated user (students need to create courses to upload)
 export async function POST(req: NextRequest) {
   try {
-    const { profile, error } = await requireRole(['contributor', 'admin']);
+    const { profile, error } = await requireRole(['student', 'contributor', 'admin']);
     if (error || !profile) return unauthorized(error ?? 'Unauthorized');
 
     const body = await req.json();

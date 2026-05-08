@@ -11,6 +11,7 @@ export type TransactionReason = 'contribution_reward' | 'withdrawal' | 'adjustme
 export type WithdrawalStatus = 'pending' | 'processing' | 'successful' | 'failed';
 export type FileType = 'pdf' | 'image';
 export type ModerationStatus = 'pending' | 'approved' | 'rejected';
+export type QuestionType = 'mcq' | 'theory';
 
 export interface User {
   id: string;
@@ -45,6 +46,7 @@ export interface Question {
   options: QuestionOptions | null;
   correct_answer: string | null;
   year: number | null;
+  question_type: QuestionType;
   source_type: SourceType;
   status: ModerationStatus;
   is_deleted: boolean;
@@ -73,6 +75,8 @@ export interface Upload {
   processed: boolean;
   processing_error: string | null;
   questions_extracted: number;
+  progress: number;
+  processing_stage: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -3,7 +3,7 @@
   "regions": ["iad1"],
   "functions": {
     "src/app/api/uploads/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 30
     },
     "src/app/api/uploads/[id]/process/route.ts": {
       "maxDuration": 300

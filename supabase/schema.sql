@@ -317,137 +317,109 @@ ALTER TABLE public.revenue_pool ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.question_duplicates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+-- ---- HELPER FUNCTIONS for role checks (SECURITY DEFINER avoids RLS recursion) ----
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin');
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_contributor_or_admin()
+RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('contributor','admin'));
+$$;
+
+GRANT EXECUTE ON FUNCTION public.is_admin()                TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_contributor_or_admin() TO anon, authenticated, service_role;
+
 -- ---- users ----
-CREATE POLICY "users_select_own" ON public.users
-  FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "users_select_own"   ON public.users FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "users_update_own"   ON public.users FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "admin_all_users"    ON public.users FOR ALL    USING (public.is_admin());
 
-CREATE POLICY "users_update_own" ON public.users
-  FOR UPDATE USING (auth.uid() = id);
+-- ---- courses ----
+CREATE POLICY "courses_select_all"               ON public.courses FOR SELECT USING (true);
+CREATE POLICY "courses_insert_authenticated"     ON public.courses FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY "courses_update_admin"             ON public.courses FOR UPDATE USING (public.is_admin());
+CREATE POLICY "courses_delete_admin"             ON public.courses FOR DELETE USING (public.is_admin());
 
-CREATE POLICY "admin_all_users" ON public.users
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
-
--- ---- courses (public read, admin/contributor write) ----
-CREATE POLICY "courses_select_all" ON public.courses
-  FOR SELECT USING (true);
-
-CREATE POLICY "courses_insert_contributor_admin" ON public.courses
-  FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('contributor','admin'))
-  );
-
-CREATE POLICY "courses_update_admin" ON public.courses
-  FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
-
-CREATE POLICY "courses_delete_admin" ON public.courses
-  FOR DELETE USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
-
--- ---- questions (approved public read; own pending readable) ----
-CREATE POLICY "questions_select_approved" ON public.questions
-  FOR SELECT USING (status = 'approved' AND is_deleted = false);
-
-CREATE POLICY "questions_select_own_pending" ON public.questions
-  FOR SELECT USING (
-    is_deleted = false AND
-    EXISTS (
-      SELECT 1 FROM public.question_contributions qc
-      WHERE qc.question_id = id AND qc.user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "questions_insert_contributor" ON public.questions
-  FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role IN ('contributor','admin'))
-  );
-
-CREATE POLICY "questions_update_admin" ON public.questions
-  FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
-
-CREATE POLICY "admin_all_questions" ON public.questions
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
+-- ---- questions ----
+CREATE POLICY "questions_select_approved"    ON public.questions FOR SELECT USING (status = 'approved' AND is_deleted = false);
+CREATE POLICY "questions_select_own_pending" ON public.questions FOR SELECT USING (
+  is_deleted = false AND EXISTS (
+    SELECT 1 FROM public.question_contributions qc
+    WHERE qc.question_id = id AND qc.user_id = auth.uid()
+  )
+);
+CREATE POLICY "questions_insert_contributor" ON public.questions FOR INSERT WITH CHECK (public.is_contributor_or_admin());
+CREATE POLICY "questions_update_admin"       ON public.questions FOR UPDATE USING (public.is_admin());
+CREATE POLICY "admin_all_questions"          ON public.questions FOR ALL    USING (public.is_admin());
 
 -- ---- question_contributions ----
-CREATE POLICY "contributions_select_own" ON public.question_contributions
-  FOR SELECT USING (user_id = auth.uid());
-
-CREATE POLICY "contributions_select_admin" ON public.question_contributions
-  FOR SELECT USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
-
-CREATE POLICY "contributions_insert_own" ON public.question_contributions
-  FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "contributions_select_own"   ON public.question_contributions FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "contributions_select_admin" ON public.question_contributions FOR SELECT USING (public.is_admin());
+CREATE POLICY "contributions_insert_own"   ON public.question_contributions FOR INSERT WITH CHECK (user_id = auth.uid());
 
 -- ---- uploads ----
-CREATE POLICY "uploads_select_own" ON public.uploads
-  FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "uploads_select_own" ON public.uploads FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "uploads_insert_own" ON public.uploads FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "admin_all_uploads"  ON public.uploads FOR ALL    USING (public.is_admin());
 
-CREATE POLICY "uploads_insert_own" ON public.uploads
-  FOR INSERT WITH CHECK (user_id = auth.uid());
-
-CREATE POLICY "admin_all_uploads" ON public.uploads
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
-
--- ---- question_analytics (public read) ----
-CREATE POLICY "analytics_select_all" ON public.question_analytics
-  FOR SELECT USING (true);
+-- ---- question_analytics ----
+CREATE POLICY "analytics_select_all" ON public.question_analytics FOR SELECT USING (true);
 
 -- ---- wallet_ledger ----
-CREATE POLICY "ledger_select_own" ON public.wallet_ledger
-  FOR SELECT USING (user_id = auth.uid());
-
-CREATE POLICY "admin_all_ledger" ON public.wallet_ledger
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
+CREATE POLICY "ledger_select_own" ON public.wallet_ledger FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "admin_all_ledger"  ON public.wallet_ledger FOR ALL    USING (public.is_admin());
 
 -- ---- withdrawals ----
-CREATE POLICY "withdrawals_select_own" ON public.withdrawals
-  FOR SELECT USING (user_id = auth.uid());
-
-CREATE POLICY "withdrawals_insert_own" ON public.withdrawals
-  FOR INSERT WITH CHECK (user_id = auth.uid());
-
-CREATE POLICY "admin_all_withdrawals" ON public.withdrawals
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
+CREATE POLICY "withdrawals_select_own" ON public.withdrawals FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "withdrawals_insert_own" ON public.withdrawals FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "admin_all_withdrawals"  ON public.withdrawals FOR ALL    USING (public.is_admin());
 
 -- ---- revenue_pool (admin only) ----
-CREATE POLICY "admin_all_revenue_pool" ON public.revenue_pool
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
+CREATE POLICY "admin_all_revenue_pool" ON public.revenue_pool FOR ALL USING (public.is_admin());
 
 -- ---- question_duplicates (admin only) ----
-CREATE POLICY "admin_all_duplicates" ON public.question_duplicates
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
-  );
+CREATE POLICY "admin_all_duplicates" ON public.question_duplicates FOR ALL USING (public.is_admin());
 
 -- ---- notifications ----
-CREATE POLICY "notifications_select_own" ON public.notifications
-  FOR SELECT USING (user_id = auth.uid());
-
-CREATE POLICY "notifications_update_own" ON public.notifications
-  FOR UPDATE USING (user_id = auth.uid());
-
-CREATE POLICY "admin_all_notifications" ON public.notifications
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')
+CREATE POLICY "notifications_select_own" ON public.notifications FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "notifications_update_own" ON public.notifications FOR UPDATE USING (user_id = auth.uid());
+CREATE POLICY "admin_all_notifications"  ON public.notifications FOR ALL    USING (public.is_admin()
   );
+
+-- ============================================================
+-- ROLE GRANTS
+-- Required: without these the anon/authenticated roles get
+-- "permission denied" even when RLS policies would allow access.
+-- ============================================================
+
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- Public read-only tables (courses, approved questions, analytics)
+GRANT SELECT ON public.courses            TO anon, authenticated;
+GRANT SELECT ON public.questions          TO anon, authenticated;
+GRANT SELECT ON public.question_analytics TO anon, authenticated;
+
+-- Authenticated users full access (RLS still controls rows)
+GRANT SELECT, INSERT, UPDATE        ON public.users                  TO authenticated;
+GRANT INSERT, UPDATE                ON public.courses                TO authenticated;
+GRANT INSERT, UPDATE, DELETE        ON public.questions              TO authenticated;
+GRANT SELECT, INSERT                ON public.question_contributions TO authenticated;
+GRANT SELECT, INSERT                ON public.uploads                TO authenticated;
+GRANT SELECT                        ON public.wallet_ledger          TO authenticated;
+GRANT SELECT, INSERT                ON public.withdrawals            TO authenticated;
+GRANT SELECT, INSERT                ON public.notifications          TO authenticated;
+GRANT UPDATE                        ON public.notifications          TO authenticated;
+GRANT SELECT                        ON public.revenue_pool           TO authenticated;
+GRANT SELECT                        ON public.question_duplicates    TO authenticated;
+
+-- Service role gets full access (used by admin client, bypasses RLS)
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+
+-- Functions need explicit EXECUTE grants
+GRANT EXECUTE ON FUNCTION public.get_wallet_balance(UUID)         TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.increment_question_views(UUID)   TO authenticated, anon, service_role;
 
 -- ============================================================
 -- STORAGE BUCKETS (run via Supabase dashboard or migration)

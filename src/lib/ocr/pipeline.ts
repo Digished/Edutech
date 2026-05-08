@@ -1,13 +1,63 @@
 // ============================================================
 // Upload Processing Pipeline
-// Orchestrates: storage → OCR → question extraction → contribution logging
+// storage → OCR → draft extractions (user reviews) → confirm publishes them
+// Persists progress (0–100) and stage to the uploads row.
 // ============================================================
 
 import { createAdminClient } from '@/lib/supabase/admin';
-import { extractQuestionsFromText, extractQuestionsFromImageUrl } from './processor';
+import {
+  extractQuestionsFromImageUrl,
+  extractQuestionsFromPdfBuffer,
+  ExtractionResult,
+} from './processor';
 import { hashQuestionText } from '@/lib/utils/hash';
-import { detectDuplicates } from '@/lib/dedup/similarity';
+import { trigramSimilarity } from '@/lib/dedup/similarity';
 import { FileType } from '@/types/database';
+
+type SupabaseAdmin = ReturnType<typeof createAdminClient>;
+
+async function setProgress(
+  supabase: SupabaseAdmin,
+  uploadId: string,
+  progress: number,
+  stage: string,
+) {
+  await supabase
+    .from('uploads')
+    .update({ progress, processing_stage: stage })
+    .eq('id', uploadId);
+}
+
+async function findDuplicate(
+  supabase: SupabaseAdmin,
+  courseId: string,
+  text: string,
+  hash: string,
+): Promise<string | null> {
+  // 1) Exact hash match — same normalized text already in the bank.
+  const { data: exact } = await supabase
+    .from('questions')
+    .select('id')
+    .eq('course_id', courseId)
+    .eq('content_hash', hash)
+    .eq('is_deleted', false)
+    .limit(1);
+  if (exact && exact.length > 0) return exact[0].id;
+
+  // 2) Trigram similarity ≥ 0.8 against same-course questions.
+  const { data: candidates } = await supabase
+    .from('questions')
+    .select('id, question_text')
+    .eq('course_id', courseId)
+    .eq('is_deleted', false)
+    .limit(500);
+  if (!candidates) return null;
+
+  for (const c of candidates) {
+    if (trigramSimilarity(text, c.question_text) >= 0.85) return c.id;
+  }
+  return null;
+}
 
 export async function processUpload(uploadId: string): Promise<void> {
   const supabase = createAdminClient();
@@ -22,90 +72,121 @@ export async function processUpload(uploadId: string): Promise<void> {
   if (upload.processed) return;
 
   try {
-    let extractionResult;
+    await setProgress(supabase, uploadId, 10, 'Preparing file');
 
+    const { data: signed } = await supabase.storage
+      .from('exam-uploads')
+      .createSignedUrl(upload.file_url, 600);
+    if (!signed?.signedUrl) throw new Error('Could not generate signed URL');
+
+    await setProgress(supabase, uploadId, 25, 'Reading questions with AI');
+
+    let extractionResult: ExtractionResult;
     if ((upload.file_type as FileType) === 'image') {
-      // Generate signed URL for the image
-      const { data: signedUrl } = await supabase.storage
-        .from('exam-uploads')
-        .createSignedUrl(upload.file_url, 300);
-
-      if (!signedUrl?.signedUrl) throw new Error('Could not generate signed URL');
-      extractionResult = await extractQuestionsFromImageUrl(signedUrl.signedUrl);
+      extractionResult = await extractQuestionsFromImageUrl(signed.signedUrl);
     } else {
-      // For PDF: download and pass text content
-      // In production, integrate a PDF-to-text service (e.g., pdf-parse, Adobe PDF Extract)
-      const { data: signedUrl } = await supabase.storage
-        .from('exam-uploads')
-        .createSignedUrl(upload.file_url, 300);
-
-      if (!signedUrl?.signedUrl) throw new Error('Could not generate signed URL');
-
-      // Pass the URL to the AI for extraction (GPT-4o can handle PDF content via URL)
-      extractionResult = await extractQuestionsFromImageUrl(signedUrl.signedUrl);
+      const fileResp = await fetch(signed.signedUrl);
+      if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);
+      const fileBuffer = await fileResp.arrayBuffer();
+      extractionResult = await extractQuestionsFromPdfBuffer(
+        fileBuffer,
+        upload.original_name ?? 'paper.pdf',
+      );
     }
 
     if (extractionResult.error && extractionResult.questions.length === 0) {
       await supabase
         .from('uploads')
-        .update({ processed: true, processing_error: extractionResult.error })
+        .update({
+          processed: true,
+          processing_error: extractionResult.error,
+          progress: 100,
+          processing_stage: 'Failed',
+        })
         .eq('id', uploadId);
       return;
     }
 
-    let questionsExtracted = 0;
+    // Clear any prior drafts for this upload (e.g. retried processing).
+    await supabase.from('upload_extractions').delete().eq('upload_id', uploadId);
 
-    for (const eq of extractionResult.questions) {
-      if (!eq.question_text?.trim()) continue;
+    await setProgress(supabase, uploadId, 70, 'Checking for duplicates');
 
-      const content_hash = hashQuestionText(eq.question_text);
+    const total = extractionResult.questions.length || 1;
+    const draftRows: {
+      upload_id: string;
+      position: number;
+      question_text: string;
+      question_type: 'mcq' | 'theory';
+      options: Record<string, string> | null;
+      correct_answer: string | null;
+      year: number | null;
+      content_hash: string;
+      is_duplicate: boolean;
+      duplicate_of: string | null;
+    }[] = [];
 
-      const { data: question, error: qError } = await supabase
-        .from('questions')
-        .insert({
-          course_id: upload.course_id,
-          question_text: eq.question_text,
-          options: eq.options ?? null,
-          correct_answer: eq.correct_answer ?? null,
-          year: eq.year ?? null,
-          source_type: 'extracted',
-          status: 'pending',
-          content_hash,
-        })
-        .select()
-        .single();
+    for (let i = 0; i < extractionResult.questions.length; i++) {
+      const eq = extractionResult.questions[i];
+      const text = eq.question_text?.trim();
+      if (!text) continue;
 
-      if (qError) continue;
+      const content_hash = hashQuestionText(text);
+      const dupOf = await findDuplicate(supabase, upload.course_id, text, content_hash);
 
-      await supabase.from('question_contributions').insert({
-        question_id: question.id,
-        user_id: upload.user_id,
-        contribution_type: 'extraction',
-        contribution_weight: 1.0,
+      draftRows.push({
+        upload_id: uploadId,
+        position: i,
+        question_text: text,
+        question_type: eq.question_type,
+        options: eq.options ?? null,
+        correct_answer: eq.correct_answer ?? null,
+        year: eq.year ?? null,
+        content_hash,
+        is_duplicate: dupOf !== null,
+        duplicate_of: dupOf,
       });
 
-      detectDuplicates(question.id, eq.question_text, upload.course_id).catch(() => null);
-      questionsExtracted++;
+      const pct = 70 + Math.floor((25 * (i + 1)) / total);
+      await setProgress(
+        supabase,
+        uploadId,
+        pct,
+        `Reviewing extraction ${i + 1}/${total}`,
+      );
+    }
+
+    if (draftRows.length > 0) {
+      await supabase.from('upload_extractions').insert(draftRows);
     }
 
     await supabase
       .from('uploads')
-      .update({ processed: true, questions_extracted: questionsExtracted })
+      .update({
+        processed: true,
+        progress: 100,
+        processing_stage: 'Awaiting your review',
+        needs_review: true,
+      })
       .eq('id', uploadId);
 
-    // Notify uploader
     await supabase.from('notifications').insert({
       user_id: upload.user_id,
-      title: 'Upload Processed',
-      body: `Your upload has been processed. ${questionsExtracted} questions were extracted and are pending review.`,
+      title: 'Questions ready for review',
+      body: `We extracted ${draftRows.length} question${draftRows.length === 1 ? '' : 's'} from your upload. Review and confirm to publish.`,
       type: 'upload',
-      metadata: { upload_id: uploadId, questions_extracted: questionsExtracted },
+      metadata: { upload_id: uploadId, extracted: draftRows.length },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Processing failed';
     await supabase
       .from('uploads')
-      .update({ processed: true, processing_error: message })
+      .update({
+        processed: true,
+        processing_error: message,
+        progress: 100,
+        processing_stage: 'Failed',
+      })
       .eq('id', uploadId);
     throw err;
   }

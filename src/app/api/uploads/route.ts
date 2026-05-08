@@ -5,8 +5,6 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
 import { created, badRequest, unauthorized, serverError, paginated } from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
-import { processUpload } from '@/lib/ocr/pipeline';
-
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 // GET /api/uploads — own uploads
@@ -72,12 +70,26 @@ export async function POST(req: NextRequest) {
 
     const adminSupabase = createAdminClient();
 
-    const { error: storageError } = await adminSupabase.storage
-      .from('exam-uploads')
-      .upload(storagePath, file, {
-        contentType: file.type,
+    async function uploadOnce() {
+      return adminSupabase.storage.from('exam-uploads').upload(storagePath, file!, {
+        contentType: file!.type,
         upsert: false,
       });
+    }
+
+    let { error: storageError } = await uploadOnce();
+
+    // Auto-provision the bucket if it doesn't exist yet, then retry once.
+    if (storageError && /bucket not found/i.test(storageError.message)) {
+      const { error: createErr } = await adminSupabase.storage.createBucket('exam-uploads', {
+        public: false,
+        fileSizeLimit: MAX_FILE_SIZE,
+      });
+      if (createErr && !/already exists/i.test(createErr.message)) {
+        return serverError(`Storage setup error: ${createErr.message}`);
+      }
+      ({ error: storageError } = await uploadOnce());
+    }
 
     if (storageError) return serverError(`Storage error: ${storageError.message}`);
 
@@ -97,13 +109,7 @@ export async function POST(req: NextRequest) {
 
     if (dbError) return serverError(dbError.message);
 
-    // Trigger async processing (non-blocking on Vercel via background tasks)
-    // In production, use a queue (e.g., Vercel Cron + Supabase Edge Function)
-    processUpload(upload.id).catch((err) => {
-      console.error(`Upload processing failed for ${upload.id}:`, err);
-    });
-
-    return created(upload, 'File uploaded. Processing started.');
+    return created(upload, 'File uploaded. Call /api/uploads/[id]/process to start extraction.');
   } catch {
     return serverError();
   }

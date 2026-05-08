@@ -29,7 +29,10 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false })
       .range(from, to);
 
-    if (ledgerError) return serverError(ledgerError.message);
+    if (ledgerError) {
+      console.error('[wallet] ledger query error:', ledgerError);
+      return serverError(`ledger: ${ledgerError.message}`);
+    }
 
     return ok({
       balance: balanceData ?? 0,
@@ -42,7 +45,8 @@ export async function GET(req: NextRequest) {
         totalPages: Math.ceil((count ?? 0) / limit),
       },
     });
-  } catch {
-    return serverError();
+  } catch (e) {
+    console.error('[wallet] unexpected error:', e);
+    return serverError(e instanceof Error ? e.message : 'unknown error');
   }
 }

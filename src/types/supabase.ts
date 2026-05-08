@@ -48,6 +48,50 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
+      universities: {
+        Row: {
+          id: string;
+          name: string;
+          short_name: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          short_name?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          name?: string;
+          short_name?: string | null;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      departments: {
+        Row: {
+          id: string;
+          university_id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          university_id: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          university_id?: string;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
       courses: {
         Row: {
           id: string;
@@ -86,6 +130,7 @@ export interface Database {
           options: Json | null;
           correct_answer: string | null;
           year: number | null;
+          question_type: 'mcq' | 'theory';
           source_type: 'uploaded' | 'manual' | 'extracted';
           status: 'pending' | 'approved' | 'rejected';
           is_deleted: boolean;
@@ -100,6 +145,7 @@ export interface Database {
           options?: Json | null;
           correct_answer?: string | null;
           year?: number | null;
+          question_type?: 'mcq' | 'theory';
           source_type?: 'uploaded' | 'manual' | 'extracted';
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
@@ -113,6 +159,7 @@ export interface Database {
           options?: Json | null;
           correct_answer?: string | null;
           year?: number | null;
+          question_type?: 'mcq' | 'theory';
           source_type?: 'uploaded' | 'manual' | 'extracted';
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
@@ -158,6 +205,9 @@ export interface Database {
           processed: boolean;
           processing_error: string | null;
           questions_extracted: number;
+          progress: number;
+          processing_stage: string | null;
+          needs_review: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -172,6 +222,9 @@ export interface Database {
           processed?: boolean;
           processing_error?: string | null;
           questions_extracted?: number;
+          progress?: number;
+          processing_stage?: string | null;
+          needs_review?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -179,7 +232,164 @@ export interface Database {
           processed?: boolean;
           processing_error?: string | null;
           questions_extracted?: number;
+          progress?: number;
+          processing_stage?: string | null;
+          needs_review?: boolean;
           updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      upload_extractions: {
+        Row: {
+          id: string;
+          upload_id: string;
+          position: number;
+          question_text: string;
+          question_type: 'mcq' | 'theory';
+          options: Json | null;
+          correct_answer: string | null;
+          year: number | null;
+          content_hash: string | null;
+          is_duplicate: boolean;
+          duplicate_of: string | null;
+          excluded: boolean;
+          confirmed: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          upload_id: string;
+          position?: number;
+          question_text: string;
+          question_type?: 'mcq' | 'theory';
+          options?: Json | null;
+          correct_answer?: string | null;
+          year?: number | null;
+          content_hash?: string | null;
+          is_duplicate?: boolean;
+          duplicate_of?: string | null;
+          excluded?: boolean;
+          confirmed?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          position?: number;
+          question_text?: string;
+          question_type?: 'mcq' | 'theory';
+          options?: Json | null;
+          correct_answer?: string | null;
+          year?: number | null;
+          content_hash?: string | null;
+          is_duplicate?: boolean;
+          duplicate_of?: string | null;
+          excluded?: boolean;
+          confirmed?: boolean;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      question_attempts: {
+        Row: {
+          id: string;
+          question_id: string;
+          user_id: string;
+          answer: string;
+          is_correct: boolean | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          question_id: string;
+          user_id: string;
+          answer: string;
+          is_correct?: boolean | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          answer?: string;
+          is_correct?: boolean | null;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      question_comments: {
+        Row: {
+          id: string;
+          question_id: string;
+          user_id: string;
+          body: string;
+          is_anonymous: boolean;
+          is_hidden: boolean;
+          pinned: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          question_id: string;
+          user_id: string;
+          body: string;
+          is_anonymous?: boolean;
+          is_hidden?: boolean;
+          pinned?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          body?: string;
+          is_anonymous?: boolean;
+          is_hidden?: boolean;
+          pinned?: boolean;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      comment_upvotes: {
+        Row: {
+          comment_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          comment_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          created_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      question_flags: {
+        Row: {
+          id: string;
+          question_id: string;
+          user_id: string;
+          reason: string;
+          details: string | null;
+          status: string;
+          created_at: string;
+          reviewed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          question_id: string;
+          user_id: string;
+          reason: string;
+          details?: string | null;
+          status?: string;
+          created_at?: string;
+          reviewed_at?: string | null;
+        };
+        Update: {
+          reason?: string;
+          details?: string | null;
+          status?: string;
+          reviewed_at?: string | null;
         };
         Relationships: EmptyRelationships;
       };
