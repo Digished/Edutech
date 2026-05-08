@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 
 export default function AdminLoginPage() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,7 +17,7 @@ export default function AdminLoginPage() {
       const res = await fetch('/api/admin/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email, password }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -43,7 +44,7 @@ export default function AdminLoginPage() {
           </Link>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Admin access</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Enter the admin password configured in your environment
+            Enter the admin email and password configured in your environment
           </p>
         </div>
 
@@ -56,11 +57,26 @@ export default function AdminLoginPage() {
             )}
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                Admin email
+              </label>
+              <input
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@yourdomain.com"
+                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
                 Admin password
               </label>
               <input
                 type="password"
                 required
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

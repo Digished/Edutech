@@ -14,10 +14,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { password } = await req.json().catch(() => ({ password: '' }));
+  const body = await req.json().catch(() => ({ email: '', password: '' }));
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
 
-  if (!password || password !== adminPassword) {
-    return NextResponse.json({ error: 'Incorrect password' }, { status: 401 });
+  if (!email || !password) {
+    return NextResponse.json({ error: 'Email and password are required' }, { status: 400 });
+  }
+
+  if (email !== adminEmail.trim().toLowerCase() || password !== adminPassword) {
+    return NextResponse.json({ error: 'Incorrect admin credentials' }, { status: 401 });
   }
 
   const supabase = await createClient();

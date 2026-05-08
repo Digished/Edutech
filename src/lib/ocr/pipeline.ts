@@ -99,7 +99,9 @@ export async function processUpload(uploadId: string): Promise<void> {
           correct_answer: eq.correct_answer ?? null,
           year: eq.year ?? null,
           source_type: 'extracted',
-          status: 'pending',
+          // Auto-approve so questions appear in the public bank immediately;
+          // admins can still soft-delete or reject from /admin/questions.
+          status: 'approved',
           content_hash,
         })
         .select()

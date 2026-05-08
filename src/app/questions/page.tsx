@@ -22,9 +22,17 @@ interface Question {
   question_analytics: { views_count: number }[];
 }
 
+interface Me {
+  id: string;
+  full_name: string | null;
+  email: string;
+  role: 'student' | 'contributor' | 'admin';
+}
+
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -67,6 +75,15 @@ export default function QuestionsPage() {
   useEffect(() => { fetchCourses(); }, [fetchCourses]);
   useEffect(() => { fetchQuestions(); }, [fetchQuestions]);
 
+  useEffect(() => {
+    fetch('/api/auth/me').then(async (r) => {
+      if (r.ok) {
+        const j = await r.json();
+        setMe(j.data ?? null);
+      }
+    });
+  }, []);
+
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setSearch(searchInput);
@@ -87,12 +104,25 @@ export default function QuestionsPage() {
             <span className="font-semibold text-zinc-900 dark:text-white">EduTech</span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
-              Log in
-            </Link>
-            <Link href="/register" className="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors">
-              Sign up
-            </Link>
+            {me ? (
+              <>
+                <Link href="/dashboard" className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
+                  Dashboard
+                </Link>
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                  {me.full_name ?? me.email}
+                </span>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
+                  Log in
+                </Link>
+                <Link href="/register" className="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                  Sign up
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
