@@ -8,7 +8,7 @@ import {
 } from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
 import { hashQuestionText } from '@/lib/utils/hash';
-import { detectDuplicates } from '@/lib/dedup/similarity';
+import { detectDuplicates, findDuplicateMatch } from '@/lib/dedup/similarity';
 
 const schema = z.object({
   course_id: z.string().uuid(),
@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = req.nextUrl;
     const course_id = searchParams.get('course_id');
     const year = searchParams.get('year');
+    const question_type = searchParams.get('question_type');
     const page = parseInt(searchParams.get('page') ?? '1');
     const limit = parseInt(searchParams.get('limit') ?? '20');
     const { from, to } = getPagination(page, limit);
@@ -46,6 +47,9 @@ export async function GET(req: NextRequest) {
 
     if (course_id) query = query.eq('course_id', course_id);
     if (year) query = query.eq('year', parseInt(year));
+    if (question_type === 'mcq' || question_type === 'theory') {
+      query = query.eq('question_type', question_type);
+    }
 
     const { data, count, error } = await query
       .order('created_at', { ascending: false })
@@ -72,6 +76,14 @@ export async function POST(req: NextRequest) {
     const content_hash = hashQuestionText(question_text);
 
     const adminSupabase = createAdminClient();
+
+    // Reject near-duplicates (≥85% trigram similarity within the same course).
+    const dup = await findDuplicateMatch(question_text, course_id);
+    if (dup) {
+      return badRequest(
+        `This question looks like a near-duplicate of an existing one (${Math.round(dup.score * 100)}% similar). Please edit the existing question instead.`,
+      );
+    }
 
     // Create question (pending moderation)
     const { data: question, error: qError } = await adminSupabase

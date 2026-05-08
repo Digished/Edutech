@@ -23,7 +23,14 @@ interface Question {
   year: number | null;
   question_type: 'mcq' | 'theory';
   courses: Course;
-  question_analytics: { views_count: number }[];
+  question_analytics: { views_count: number }[] | { views_count: number } | null;
+}
+
+function viewsOf(q: Question): number {
+  const a = q.question_analytics;
+  if (!a) return 0;
+  if (Array.isArray(a)) return a[0]?.views_count ?? 0;
+  return a.views_count ?? 0;
 }
 
 interface Me {
@@ -235,7 +242,7 @@ export default function QuestionsPage() {
                     {q.courses?.name ?? 'Unknown course'}
                   </span>
                   {q.year && <span>{q.year}</span>}
-                  <span>{q.question_analytics?.[0]?.views_count ?? 0} views</span>
+                  <span>{viewsOf(q)} views</span>
                   <span className="text-zinc-300 dark:text-zinc-600">{q.courses?.school}</span>
                 </div>
               </Link>

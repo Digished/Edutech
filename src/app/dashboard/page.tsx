@@ -11,7 +11,6 @@ import {
   LogOutIcon,
   PenIcon,
   PlayIcon,
-  UploadIcon,
   WalletIcon,
 } from '@/components/icons';
 
@@ -140,9 +139,7 @@ export default function DashboardPage() {
   const actions = [
     { label: 'Browse questions', href: '/questions', desc: 'Search the bank', Icon: BookIcon },
     { label: 'Practice exam', href: '/dashboard/practice', desc: 'Sit a mock exam', Icon: FlaskIcon },
-    { label: 'Upload paper', href: '/dashboard/uploads', desc: 'Add past questions', Icon: UploadIcon },
-    { label: 'Wallet', href: '/dashboard/wallet', desc: 'Balance & withdrawals', Icon: WalletIcon },
-    { label: 'Contributions', href: '/dashboard/contributions', desc: 'Your submissions', Icon: PenIcon },
+    { label: 'Contributions', href: '/dashboard/contributions', desc: 'Submit & track', Icon: PenIcon },
   ];
 
   return (
@@ -238,7 +235,7 @@ export default function DashboardPage() {
 
         {/* Quick actions — denser grid with icons */}
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2">Quick actions</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
           {actions.map(({ label, href, desc, Icon }) => (
             <Link
               key={href}

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { PenIcon, ArrowLeftIcon } from '@/components/icons';
+import { PenIcon, ArrowLeftIcon, UploadIcon, ArrowRightIcon } from '@/components/icons';
+import RevenueExplainer from '@/components/RevenueExplainer';
 
 interface Contribution {
   id: string;
@@ -75,11 +76,32 @@ export default function ContributionsPage() {
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">My contributions</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            {total.toLocaleString()} contribution{total !== 1 ? 's' : ''} — these determine your share of revenue distributions
+            {total.toLocaleString()} contribution{total !== 1 ? 's' : ''} — these determine your share of the monthly revenue pool.
           </p>
+        </div>
+
+        {/* Upload paper CTA — moved here from the dashboard */}
+        <Link
+          href="/dashboard/uploads"
+          className="mb-3 group flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-green-300"
+        >
+          <div className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-lg bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 flex items-center justify-center">
+              <UploadIcon size={16} />
+            </span>
+            <div>
+              <div className="text-sm font-medium text-zinc-900 dark:text-white">Upload a past paper</div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">AI extracts the questions for you</div>
+            </div>
+          </div>
+          <ArrowRightIcon size={14} className="text-zinc-400 group-hover:text-green-600 group-hover:translate-x-0.5 transition" />
+        </Link>
+
+        <div className="mb-5">
+          <RevenueExplainer />
         </div>
 
         {loading ? (

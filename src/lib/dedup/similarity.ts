@@ -23,12 +23,42 @@ export function trigramSimilarity(a: string, b: string): number {
   return union.size === 0 ? 0 : intersection.size / union.size;
 }
 
+export const DUPLICATE_SIMILARITY_THRESHOLD = 0.85;
+
+// Find an existing question that crosses the duplicate threshold within
+// the same course. Returns the matched question id and score (or null).
+export async function findDuplicateMatch(
+  questionText: string,
+  courseId: string,
+  threshold = DUPLICATE_SIMILARITY_THRESHOLD,
+): Promise<{ id: string; score: number } | null> {
+  const supabase = createAdminClient();
+
+  const { data: candidates } = await supabase
+    .from('questions')
+    .select('id, question_text')
+    .eq('course_id', courseId)
+    .eq('is_deleted', false)
+    .limit(500);
+
+  if (!candidates?.length) return null;
+
+  let best: { id: string; score: number } | null = null;
+  for (const c of candidates) {
+    const score = trigramSimilarity(questionText, c.question_text);
+    if (score >= threshold && (best === null || score > best.score)) {
+      best = { id: c.id, score };
+    }
+  }
+  return best;
+}
+
 // Detect and store duplicate pairs for a newly added question
 export async function detectDuplicates(
   newQuestionId: string,
   newQuestionText: string,
   courseId: string,
-  threshold = 0.8,
+  threshold = DUPLICATE_SIMILARITY_THRESHOLD,
 ): Promise<void> {
   const supabase = createAdminClient();
 

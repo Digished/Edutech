@@ -29,8 +29,9 @@ export async function GET(
 
     if (error || !data) return notFound('Question not found');
 
-    // Increment view count async
-    supabase.rpc('increment_question_views', { p_question_id: id }).then(() => null);
+    // Increment view count — await so the request actually fires before the
+    // serverless function returns. Use the admin client so it bypasses RLS.
+    await createAdminClient().rpc('increment_question_views', { p_question_id: id });
 
     return ok(data);
   } catch {

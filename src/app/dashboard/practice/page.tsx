@@ -29,6 +29,7 @@ export default function PracticeSetupPage() {
   const [count, setCount] = useState(10);
   const [school, setSchool] = useState('');
   const [reveal, setReveal] = useState<'after_each' | 'at_end'>('at_end');
+  const [questionType, setQuestionType] = useState<'mcq' | 'theory' | 'all'>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [paused, setPaused] = useState<PausedSummary | null>(null);
@@ -79,6 +80,7 @@ export default function PracticeSetupPage() {
     try {
       const params = new URLSearchParams({ limit: String(Math.min(Math.max(count, 1), 50)) });
       if (courseId) params.set('course_id', courseId);
+      if (questionType !== 'all') params.set('question_type', questionType);
       const res = await fetch(`/api/questions?${params}`);
       const json = await res.json();
       const ids: string[] = (json.data ?? []).map((q: { id: string }) => q.id);
@@ -179,6 +181,30 @@ export default function PracticeSetupPage() {
               placeholder="Any course"
               emptyText="No matching courses"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">Question type</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { value: 'all', label: 'Both' },
+                { value: 'mcq', label: 'MCQ only' },
+                { value: 'theory', label: 'Theory only' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setQuestionType(opt.value)}
+                  className={`px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                    questionType === opt.value
+                      ? 'border-green-400 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-950/40 dark:text-green-400'
+                      : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
