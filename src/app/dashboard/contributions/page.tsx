@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { PenIcon, ArrowLeftIcon } from '@/components/icons';
 
 interface Contribution {
   id: string;
@@ -61,7 +62,7 @@ export default function ContributionsPage() {
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center gap-4">
           <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors">
-            ← Dashboard
+<span className="inline-flex items-center gap-1.5"><ArrowLeftIcon size={14} /> Dashboard</span>
           </Link>
           <span className="text-zinc-300 dark:text-zinc-700">|</span>
           <Link href="/" className="flex items-center gap-2">
@@ -92,7 +93,7 @@ export default function ContributionsPage() {
           </div>
         ) : contributions.length === 0 ? (
           <div className="text-center py-16 text-zinc-400 dark:text-zinc-500">
-            <div className="text-4xl mb-3">✍️</div>
+            <PenIcon size={36} className="mx-auto mb-3 text-zinc-300 dark:text-zinc-600" />
             <p className="font-medium">No contributions yet</p>
             <p className="text-sm mt-1">Upload a past paper or submit a question to get started</p>
             <div className="flex items-center justify-center gap-3 mt-5">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ArrowLeftIcon } from '@/components/icons';
 
 interface LedgerEntry {
   id: string;
@@ -107,7 +108,7 @@ export default function WalletPage() {
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors">
-              ← Dashboard
+<span className="inline-flex items-center gap-1.5"><ArrowLeftIcon size={14} /> Dashboard</span>
             </Link>
             <span className="text-zinc-300 dark:text-zinc-700">|</span>
             <Link href="/" className="flex items-center gap-2">

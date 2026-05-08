@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import SearchSelect from '@/components/SearchSelect';
+import { ArrowLeftIcon, BookIcon, InboxIcon, SearchIcon } from '@/components/icons';
 
 interface Course {
   id: string;
@@ -10,6 +12,8 @@ interface Course {
   department: string;
   code: string | null;
 }
+
+interface University { id: string; name: string; short_name: string | null }
 
 interface Question {
   id: string;
@@ -32,6 +36,7 @@ interface Me {
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [universities, setUniversities] = useState<University[]>([]);
   const [me, setMe] = useState<Me | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -74,6 +79,11 @@ export default function QuestionsPage() {
 
   useEffect(() => { fetchCourses(); }, [fetchCourses]);
   useEffect(() => { fetchQuestions(); }, [fetchQuestions]);
+  useEffect(() => {
+    fetch('/api/universities').then(async (r) => {
+      if (r.ok) { const j = await r.json(); setUniversities(j.data ?? []); }
+    });
+  }, []);
 
   useEffect(() => {
     fetch('/api/auth/me').then(async (r) => {
@@ -135,37 +145,40 @@ export default function QuestionsPage() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-3 mb-6">
+          <div className="flex flex-col sm:flex-row gap-2">
             <form onSubmit={handleSearch} className="flex gap-2 flex-1">
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search questions…"
-                className="flex-1 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-              <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors">
+              <div className="flex-1 relative">
+                <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  placeholder="Search questions…"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <button type="submit" className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
                 Search
               </button>
             </form>
-            <input
-              type="text"
+            <SearchSelect
+              className="sm:w-56"
+              options={universities.map((u) => ({ value: u.name, label: u.name, hint: u.short_name ?? undefined }))}
               value={school}
-              onChange={(e) => { setSchool(e.target.value); setSelectedCourse(''); setPage(1); }}
-              placeholder="Filter by university…"
-              className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 sm:w-56"
+              onChange={(v) => { setSchool(v); setSelectedCourse(''); setPage(1); }}
+              placeholder="All universities"
+              emptyText="No matching universities"
             />
-            <select
+            <SearchSelect
+              className="sm:w-56"
+              options={(school ? courses.filter((c) => c.school === school) : courses)
+                .map((c) => ({ value: c.id, label: `${c.name}${c.code ? ` (${c.code})` : ''}`, hint: c.school }))}
               value={selectedCourse}
-              onChange={(e) => { setSelectedCourse(e.target.value); setPage(1); }}
-              className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 sm:w-56"
-            >
-              <option value="">All courses</option>
-              {courses.map((c) => (
-                <option key={c.id} value={c.id}>{c.name} {c.code ? `(${c.code})` : ''}</option>
-              ))}
-            </select>
+              onChange={(v) => { setSelectedCourse(v); setPage(1); }}
+              placeholder="All courses"
+              emptyText="No matching courses"
+            />
           </div>
         </div>
 
@@ -181,7 +194,7 @@ export default function QuestionsPage() {
           </div>
         ) : questions.length === 0 ? (
           <div className="text-center py-16 text-zinc-400 dark:text-zinc-500">
-            <div className="text-4xl mb-3">📭</div>
+            <InboxIcon size={36} className="mx-auto mb-3 text-zinc-300 dark:text-zinc-600" />
             <p className="font-medium">No questions found</p>
             <p className="text-sm mt-1">Try adjusting your filters or search terms</p>
           </div>

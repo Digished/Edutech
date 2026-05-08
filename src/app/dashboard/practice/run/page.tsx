@@ -3,6 +3,14 @@
 import { useEffect, useState, useCallback, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  PauseIcon,
+  TrophyIcon,
+  XIcon,
+} from '@/components/icons';
 
 interface Question {
   id: string;
@@ -21,6 +29,7 @@ interface Session {
   startedAt: number;
   courseId: string | null;
   reveal: RevealMode;
+  lastIdx?: number;
 }
 
 function loadSession(): Session | null {
@@ -41,14 +50,13 @@ function saveSession(s: Session) {
 function PracticeRunInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialIdx = parseInt(searchParams.get('i') ?? '0');
 
   const [session, setSession] = useState<Session | null>(null);
   const sessionRef = useRef<Session | null>(null);
-  const [idx, setIdx] = useState(initialIdx);
+  const [idx, setIdx] = useState(0);
   const [question, setQuestion] = useState<Question | null>(null);
   const [answer, setAnswer] = useState('');
-  const [committed, setCommitted] = useState<string>(''); // for after_each MCQs: the committed selection
+  const [committed, setCommitted] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [finished, setFinished] = useState<{ correct: number; total: number; details: { id: string; correct: boolean | null; given: string; expected: string | null }[] } | null>(null);
@@ -58,7 +66,19 @@ function PracticeRunInner() {
     if (!s) { router.replace('/dashboard/practice'); return; }
     sessionRef.current = s;
     setSession(s);
-  }, [router]);
+
+    // Resume support: if `?i=` is missing, jump to last position.
+    const param = searchParams.get('i');
+    let target: number;
+    if (param !== null) {
+      target = Math.max(0, Math.min(parseInt(param || '0'), s.ids.length - 1));
+    } else {
+      target = Math.max(0, Math.min(s.lastIdx ?? 0, s.ids.length - 1));
+    }
+    setIdx(target);
+    if (param === null) router.replace(`/dashboard/practice/run?i=${target}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const currentId = session?.ids[idx];
 
@@ -75,12 +95,14 @@ function PracticeRunInner() {
     }
   }, []);
 
-  // Reload when navigating to a different question — NOT on every keystroke.
   useEffect(() => {
     if (!currentId || !sessionRef.current) return;
     const prefill = sessionRef.current.answers[currentId] ?? '';
     loadQuestion(currentId, prefill);
-  }, [currentId, loadQuestion]);
+    // Track position so resuming returns here.
+    sessionRef.current.lastIdx = idx;
+    saveSession(sessionRef.current);
+  }, [currentId, idx, loadQuestion]);
 
   function persistAnswer(value: string) {
     const s = sessionRef.current;
@@ -100,6 +122,15 @@ function PracticeRunInner() {
     if (target < 0 || target >= session.ids.length) return;
     setIdx(target);
     router.replace(`/dashboard/practice/run?i=${target}`);
+  }
+
+  function pauseAndExit() {
+    persistAnswer(answer);
+    if (sessionRef.current) {
+      sessionRef.current.lastIdx = idx;
+      saveSession(sessionRef.current);
+    }
+    router.push('/dashboard');
   }
 
   async function finish() {
@@ -139,13 +170,17 @@ function PracticeRunInner() {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
         <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-          <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-            <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700">← Dashboard</Link>
+          <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-2">
+            <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+              <ArrowLeftIcon size={14} /> Dashboard
+            </Link>
           </div>
         </nav>
         <div className="max-w-3xl mx-auto px-6 py-10">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center">
-            <div className="text-5xl mb-3">{score !== null && score >= 70 ? '🎉' : score !== null ? '📘' : '✅'}</div>
+            <span className="inline-flex w-14 h-14 rounded-full bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 items-center justify-center mb-3">
+              <TrophyIcon size={26} />
+            </span>
             <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Exam complete</h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
               {gradable > 0 ? (
@@ -167,10 +202,14 @@ function PracticeRunInner() {
                 className="block bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 hover:border-green-300 transition-colors">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <span className="font-medium text-zinc-900 dark:text-white">Question {i + 1}</span>
-                  {d.correct === true && <span className="text-xs font-semibold text-green-700 dark:text-green-400">✓ Correct</span>}
+                  {d.correct === true && (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400">
+                      <CheckIcon size={14} /> Correct
+                    </span>
+                  )}
                   {d.correct === false && (
-                    <span className="text-xs font-semibold text-red-600 dark:text-red-400">
-                      ✗ You picked {d.given || '—'} · correct: {d.expected}
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400">
+                      <XIcon size={14} /> {d.given || '—'} · correct: {d.expected}
                     </span>
                   )}
                   {d.correct === null && <span className="text-xs text-zinc-400">Ungraded · view</span>}
@@ -208,8 +247,14 @@ function PracticeRunInner() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700">← Exit</Link>
+        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center justify-between gap-3">
+          <button
+            onClick={pauseAndExit}
+            className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+            title="Save progress and exit"
+          >
+            <PauseIcon size={14} /> Pause
+          </button>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
             Question <span className="font-semibold text-zinc-900 dark:text-white">{idx + 1}</span> / {total} · {answered} answered
           </span>
@@ -262,7 +307,7 @@ function PracticeRunInner() {
                           type="button"
                           disabled={reveal}
                           onClick={() => pickMcq(k)}
-                          className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
+                          className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors flex items-center justify-between gap-2 ${
                             isThisCorrect
                               ? 'border-green-400 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-950 dark:text-green-300'
                               : isThisWrongPick
@@ -272,10 +317,17 @@ function PracticeRunInner() {
                               : 'border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                           } ${reveal ? 'cursor-not-allowed' : ''}`}
                         >
-                          <span className="font-semibold mr-2">{k}.</span>
-                          {v}
-                          {isThisCorrect && <span className="float-right text-xs font-semibold">✓ Correct</span>}
-                          {isThisWrongPick && <span className="float-right text-xs font-semibold">✗ Your answer</span>}
+                          <span><span className="font-semibold mr-2">{k}.</span>{v}</span>
+                          {isThisCorrect && (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold shrink-0">
+                              <CheckIcon size={14} /> Correct
+                            </span>
+                          )}
+                          {isThisWrongPick && (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold shrink-0">
+                              <XIcon size={14} /> Your answer
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -293,14 +345,15 @@ function PracticeRunInner() {
               </div>
 
               {showImmediateMcqFeedback && (
-                <div className={`mt-4 rounded-lg px-4 py-3 text-sm ${
+                <div className={`mt-4 rounded-lg px-4 py-3 text-sm inline-flex items-center gap-2 ${
                   isCorrect
                     ? 'bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400'
                     : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400'
                 }`}>
+                  {isCorrect ? <CheckIcon size={16} /> : <XIcon size={16} />}
                   {isCorrect
-                    ? '✓ Correct!'
-                    : `✗ Not quite. The correct answer is ${question.correct_answer}.`}
+                    ? 'Correct!'
+                    : `Not quite. The correct answer is ${question.correct_answer}.`}
                 </div>
               )}
             </>
@@ -311,24 +364,25 @@ function PracticeRunInner() {
           <button
             onClick={() => goTo(idx - 1)}
             disabled={idx === 0}
-            className="px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800"
           >
-            ← Previous
+            <ArrowLeftIcon size={14} /> Previous
           </button>
           {isLast ? (
             <button
               onClick={() => { persistAnswer(answer); finish(); }}
               disabled={submitting}
-              className="px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
+              className="inline-flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
             >
+              <TrophyIcon size={14} />
               {submitting ? 'Grading…' : 'Finish exam'}
             </button>
           ) : (
             <button
               onClick={() => { persistAnswer(answer); goTo(idx + 1); }}
-              className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg"
+              className="inline-flex items-center gap-1.5 px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg"
             >
-              Next question →
+              Next question <ArrowRightIcon size={14} />
             </button>
           )}
         </div>

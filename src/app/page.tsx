@@ -1,3 +1,5 @@
+import { BookIcon, CheckIcon, CoinIcon, SearchIcon, SparklesIcon, WalletIcon } from '@/components/icons';
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 font-sans">
@@ -88,44 +90,22 @@ export default function Home() {
           </h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              {
-                icon: "📚",
-                title: "Structured question bank",
-                desc: "Browse questions filtered by school, department, course, and year. Never search through PDFs again.",
-              },
-              {
-                icon: "🤖",
-                title: "AI-powered extraction",
-                desc: "Upload a past question paper — our AI extracts and structures every question automatically.",
-              },
-              {
-                icon: "💰",
-                title: "Earn from contributions",
-                desc: "Every question you upload or contribute earns you a share of the monthly revenue pool.",
-              },
-              {
-                icon: "🔍",
-                title: "Full-text search",
-                desc: "Search across thousands of questions instantly. Find exactly what you're studying.",
-              },
-              {
-                icon: "🏦",
-                title: "Instant withdrawals",
-                desc: "Withdraw your earnings directly to any Nigerian bank account via Paystack.",
-              },
-              {
-                icon: "✅",
-                title: "Quality moderation",
-                desc: "Every question is reviewed before going live. No spam, no duplicates, no noise.",
-              },
-            ].map((f) => (
+              { Icon: BookIcon, title: "Structured question bank", desc: "Browse questions filtered by school, department, course, and year. Never search through PDFs again." },
+              { Icon: SparklesIcon, title: "AI-powered extraction", desc: "Upload a past question paper — our AI extracts and structures every question automatically." },
+              { Icon: CoinIcon, title: "Earn from contributions", desc: "Every question you upload or contribute earns you a share of the monthly revenue pool." },
+              { Icon: SearchIcon, title: "Full-text search", desc: "Search across thousands of questions instantly. Find exactly what you're studying." },
+              { Icon: WalletIcon, title: "Instant withdrawals", desc: "Withdraw your earnings directly to any Nigerian bank account via Paystack." },
+              { Icon: CheckIcon, title: "Quality moderation", desc: "Every question is reviewed before going live. No spam, no duplicates, no noise." },
+            ].map(({ Icon, title, desc }) => (
               <div
-                key={f.title}
+                key={title}
                 className="bg-white dark:bg-zinc-800 rounded-xl p-6 border border-zinc-100 dark:border-zinc-700"
               >
-                <div className="text-2xl mb-3">{f.icon}</div>
-                <h3 className="font-semibold text-zinc-900 dark:text-white mb-2">{f.title}</h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{f.desc}</p>
+                <span className="inline-flex w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 items-center justify-center mb-3">
+                  <Icon size={18} />
+                </span>
+                <h3 className="font-semibold text-zinc-900 dark:text-white mb-2">{title}</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>
