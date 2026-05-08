@@ -24,7 +24,8 @@ export default function LoginPage() {
         setError(json.error ?? 'Login failed');
         return;
       }
-      window.location.href = '/dashboard';
+      const next = new URLSearchParams(window.location.search).get('next');
+      window.location.href = next && next.startsWith('/') ? next : '/dashboard';
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {

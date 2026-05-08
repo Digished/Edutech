@@ -21,9 +21,12 @@ const schema = z.object({
   year: z.number().int().min(1900).max(2100).nullable().optional(),
 });
 
-// GET /api/questions?course_id=&year=&page=&limit=
+// GET /api/questions?course_id=&year=&page=&limit= — auth required
 export async function GET(req: NextRequest) {
   try {
+    const { profile, error: authErr } = await requireRole(['student', 'contributor', 'admin']);
+    if (authErr || !profile) return unauthorized(authErr ?? 'Sign in to browse questions');
+
     const { searchParams } = req.nextUrl;
     const course_id = searchParams.get('course_id');
     const year = searchParams.get('year');

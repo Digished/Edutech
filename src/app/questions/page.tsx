@@ -77,6 +77,7 @@ export default function QuestionsPage() {
 
   useEffect(() => {
     fetch('/api/auth/me').then(async (r) => {
+      if (r.status === 401) { window.location.href = '/login?next=/questions'; return; }
       if (r.ok) {
         const j = await r.json();
         setMe(j.data ?? null);
@@ -187,7 +188,7 @@ export default function QuestionsPage() {
         ) : (
           <div className="space-y-3">
             {questions.map((q) => (
-              <div key={q.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 hover:border-green-200 dark:hover:border-green-800 transition-colors">
+              <Link key={q.id} href={`/questions/${q.id}`} className="block bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 hover:border-green-200 dark:hover:border-green-800 transition-colors">
                 <div className="flex items-start gap-2 mb-2">
                   <span className={`shrink-0 text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded ${
                     q.question_type === 'theory'
@@ -224,7 +225,7 @@ export default function QuestionsPage() {
                   <span>{q.question_analytics?.[0]?.views_count ?? 0} views</span>
                   <span className="text-zinc-300 dark:text-zinc-600">{q.courses?.school}</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

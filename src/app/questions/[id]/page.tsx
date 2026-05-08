@@ -1,0 +1,295 @@
+'use client';
+
+import { useEffect, useState, useCallback, use } from 'react';
+import Link from 'next/link';
+
+interface Question {
+  id: string;
+  question_text: string;
+  options: Record<string, string> | null;
+  correct_answer: string | null;
+  year: number | null;
+  question_type: 'mcq' | 'theory';
+  courses: { name: string; school: string; department: string; code: string | null } | null;
+  question_analytics: { views_count: number }[];
+}
+
+interface Attempt {
+  id: string;
+  answer: string;
+  is_correct: boolean | null;
+  updated_at: string;
+}
+
+interface Comment {
+  id: string;
+  body: string;
+  is_anonymous: boolean;
+  author: string;
+  is_mine: boolean;
+  created_at: string;
+}
+
+export default function QuestionDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [attempt, setAttempt] = useState<Attempt | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [pickedOption, setPickedOption] = useState('');
+  const [theoryAnswer, setTheoryAnswer] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [answerError, setAnswerError] = useState('');
+
+  const [commentBody, setCommentBody] = useState('');
+  const [anonymous, setAnonymous] = useState(true);
+  const [posting, setPosting] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const meRes = await fetch('/api/auth/me');
+      if (meRes.status === 401) { window.location.href = `/login?next=/questions/${id}`; return; }
+
+      const [qRes, aRes, cRes] = await Promise.all([
+        fetch(`/api/questions/${id}`),
+        fetch(`/api/questions/${id}/attempt`),
+        fetch(`/api/questions/${id}/comments?limit=100`),
+      ]);
+      const qJson = await qRes.json();
+      const aJson = await aRes.json();
+      const cJson = await cRes.json();
+      setQuestion(qJson.data ?? null);
+      const a: Attempt | null = aJson.data ?? null;
+      setAttempt(a);
+      if (a) {
+        if (qJson.data?.question_type === 'mcq') setPickedOption(a.answer);
+        else setTheoryAnswer(a.answer);
+      }
+      setComments(cJson.data ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function submitAnswer() {
+    setAnswerError('');
+    const answer = question?.question_type === 'mcq' ? pickedOption : theoryAnswer;
+    if (!answer.trim()) { setAnswerError('Please write or select an answer.'); return; }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/questions/${id}/attempt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setAnswerError(json.error ?? 'Could not save'); return; }
+      setAttempt(json.data);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function postComment(e: React.FormEvent) {
+    e.preventDefault();
+    if (!commentBody.trim()) return;
+    setPosting(true);
+    try {
+      const res = await fetch(`/api/questions/${id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: commentBody, is_anonymous: anonymous }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setComments((prev) => [...prev, json.data]);
+        setCommentBody('');
+      }
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  async function deleteComment(commentId: string) {
+    if (!confirm('Delete this comment?')) return;
+    const res = await fetch(`/api/questions/${id}/comments/${commentId}`, { method: 'DELETE' });
+    if (res.ok) setComments((prev) => prev.filter((c) => c.id !== commentId));
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center text-sm text-zinc-400">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!question) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center text-sm text-zinc-400">
+        Question not found.
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
+          <Link href="/questions" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200">
+            ← Question bank
+          </Link>
+        </div>
+      </nav>
+
+      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className={`text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded ${
+              question.question_type === 'theory'
+                ? 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400'
+                : 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
+            }`}>
+              {question.question_type === 'theory' ? 'Theory' : 'MCQ'}
+            </span>
+            {question.courses && (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                {question.courses.name}{question.courses.code ? ` (${question.courses.code})` : ''} · {question.courses.school}
+              </span>
+            )}
+            {question.year && <span className="text-xs text-zinc-400">· {question.year}</span>}
+          </div>
+
+          <p className="text-zinc-900 dark:text-white leading-relaxed font-medium whitespace-pre-line">
+            {question.question_text}
+          </p>
+
+          {/* Answer area */}
+          <div className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-800">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-3">Your answer</h2>
+
+            {question.question_type === 'mcq' && question.options ? (
+              <div className="space-y-2">
+                {Object.entries(question.options).map(([k, v]) => {
+                  const picked = pickedOption === k;
+                  const submitted = attempt?.answer === k;
+                  const isCorrect = attempt?.is_correct === true && submitted;
+                  const isWrong = attempt?.is_correct === false && submitted;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setPickedOption(k)}
+                      className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
+                        isCorrect
+                          ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400'
+                          : isWrong
+                          ? 'border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400'
+                          : picked
+                          ? 'border-green-400 bg-green-50/50 text-zinc-900 dark:border-green-700 dark:bg-green-950/40 dark:text-white'
+                          : 'border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <span className="font-semibold mr-2">{k}.</span>
+                      {v}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <textarea
+                value={theoryAnswer}
+                onChange={(e) => setTheoryAnswer(e.target.value)}
+                placeholder="Write your answer here. The community can see and discuss it via comments."
+                rows={6}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            )}
+
+            {answerError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{answerError}</p>}
+
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                onClick={submitAnswer}
+                disabled={submitting}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
+              >
+                {submitting ? 'Saving…' : attempt ? 'Update answer' : 'Submit answer'}
+              </button>
+              {attempt && question.question_type === 'mcq' && attempt.is_correct !== null && (
+                <span className={`text-xs font-medium ${attempt.is_correct ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {attempt.is_correct ? '✓ Correct' : `✗ Incorrect${question.correct_answer ? ` — correct answer is ${question.correct_answer}` : ''}`}
+                </span>
+              )}
+              {attempt && question.question_type === 'theory' && (
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">Saved</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Comments */}
+        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">
+            Discussion ({comments.length})
+          </h2>
+
+          {comments.length === 0 ? (
+            <p className="text-sm text-zinc-400">Be the first to share an explanation or alternative answer.</p>
+          ) : (
+            <div className="space-y-3">
+              {comments.map((c) => (
+                <div key={c.id} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg px-4 py-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{c.author}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-zinc-400">{new Date(c.created_at).toLocaleString()}</span>
+                      {c.is_mine && (
+                        <button onClick={() => deleteComment(c.id)} className="text-xs text-zinc-400 hover:text-red-600">
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-line">{c.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <form onSubmit={postComment} className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-800 space-y-3">
+            <textarea
+              value={commentBody}
+              onChange={(e) => setCommentBody(e.target.value)}
+              placeholder="Share your working, an alternative answer, or a correction…"
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={anonymous}
+                  onChange={(e) => setAnonymous(e.target.checked)}
+                  className="rounded"
+                />
+                Post anonymously
+              </label>
+              <button
+                type="submit"
+                disabled={posting || !commentBody.trim()}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
+              >
+                {posting ? 'Posting…' : 'Post comment'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}

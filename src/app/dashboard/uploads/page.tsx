@@ -12,6 +12,7 @@ interface Upload {
   questions_extracted: number;
   progress: number;
   processing_stage: string | null;
+  needs_review: boolean;
   created_at: string;
   courses: { name: string; code: string | null } | null;
 }
@@ -186,6 +187,7 @@ export default function UploadsPage() {
 
   function getUploadStatus(u: Upload): { label: string; cls: string } {
     if (u.processing_error) return { label: 'Failed', cls: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400' };
+    if (u.needs_review) return { label: 'Needs review', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400' };
     if (u.processed) return { label: 'Completed', cls: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400' };
     return { label: 'Processing', cls: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400' };
   }
@@ -410,7 +412,15 @@ export default function UploadsPage() {
                         </div>
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
-                        {canRetry && (
+                        {u.needs_review && (
+                          <Link
+                            href={`/dashboard/uploads/${u.id}/review`}
+                            className="px-2 py-1 rounded text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white"
+                          >
+                            Review questions
+                          </Link>
+                        )}
+                        {canRetry && !u.needs_review && (
                           <button
                             onClick={async () => {
                               setUploads((prev) => prev.map((x) => x.id === u.id
