@@ -1,0 +1,39 @@
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { requireRole } from '@/lib/utils/auth';
+import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
+
+const schema = z.object({
+  status: z.enum(['processing', 'successful', 'failed']),
+  failure_reason: z.string().optional(),
+});
+
+// PATCH /api/admin/withdrawals/[id] — manual override
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { profile, error } = await requireRole(['admin']);
+    if (error || !profile) return unauthorized();
+
+    const { id } = await params;
+    const body = await req.json();
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+
+    const supabase = createAdminClient();
+    const { data, error: dbError } = await supabase
+      .from('withdrawals')
+      .update(parsed.data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (dbError || !data) return notFound('Withdrawal not found');
+    return ok(data);
+  } catch {
+    return serverError();
+  }
+}

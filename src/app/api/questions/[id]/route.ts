@@ -1,0 +1,106 @@
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { requireRole, getAuthUser } from '@/lib/utils/auth';
+import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
+
+const updateSchema = z.object({
+  question_text: z.string().min(5).optional(),
+  options: z.record(z.string(), z.string()).nullable().optional(),
+  correct_answer: z.string().nullable().optional(),
+  year: z.number().int().min(1900).max(2100).nullable().optional(),
+});
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('questions')
+      .select(`*, courses(name, school, department, code), question_analytics(views_count, last_viewed_at)`)
+      .eq('id', id)
+      .eq('is_deleted', false)
+      .single();
+
+    if (error || !data) return notFound('Question not found');
+
+    // Increment view count async
+    supabase.rpc('increment_question_views', { p_question_id: id }).then(() => null);
+
+    return ok(data);
+  } catch {
+    return serverError();
+  }
+}
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { authUser, profile, error } = await getAuthUser();
+    if (error || !authUser || !profile) return unauthorized();
+
+    const { id } = await params;
+    const body = await req.json();
+    const parsed = updateSchema.safeParse(body);
+    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+
+    const adminSupabase = createAdminClient();
+
+    const { data: existing } = await adminSupabase
+      .from('questions')
+      .select('id, course_id')
+      .eq('id', id)
+      .eq('is_deleted', false)
+      .single();
+
+    if (!existing) return notFound('Question not found');
+
+    const { data, error: dbError } = await adminSupabase
+      .from('questions')
+      .update(parsed.data)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (dbError) return serverError(dbError.message);
+
+    // Log edit contribution (upsert — contributor can only have one edit entry)
+    await adminSupabase.from('question_contributions').upsert(
+      {
+        question_id: id,
+        user_id: authUser.id,
+        contribution_type: 'edit',
+        contribution_weight: 0.5,
+      },
+      { onConflict: 'question_id,user_id,contribution_type' },
+    );
+
+    return ok(data);
+  } catch {
+    return serverError();
+  }
+}
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { profile, error } = await requireRole(['admin']);
+    if (error || !profile) return unauthorized(error ?? 'Unauthorized');
+
+    const { id } = await params;
+    const adminSupabase = createAdminClient();
+    await adminSupabase.from('questions').update({ is_deleted: true }).eq('id', id);
+    return ok(null, 'Question deleted');
+  } catch {
+    return serverError();
+  }
+}
