@@ -37,16 +37,19 @@ export default function UploadsPage() {
   const [year, setYear] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Inline course creation
+  const [showAddCourse, setShowAddCourse] = useState(false);
+  const [courseForm, setCourseForm] = useState({ name: '', code: '', school: '', department: '' });
+  const [courseLoading, setCourseLoading] = useState(false);
+  const [courseError, setCourseError] = useState('');
+
   const limit = 20;
 
   async function loadUploads(p: number) {
     setLoading(true);
     try {
       const res = await fetch(`/api/uploads?page=${p}&limit=${limit}`);
-      if (!res.ok) {
-        window.location.href = '/login';
-        return;
-      }
+      if (res.status === 401) { window.location.href = '/login'; return; }
       const json = await res.json();
       setUploads(json.data ?? []);
       setTotal(json.total ?? 0);
@@ -55,31 +58,53 @@ export default function UploadsPage() {
     }
   }
 
-  useEffect(() => {
-    loadUploads(page);
-  }, [page]);
-
-  useEffect(() => {
-    async function loadCourses() {
-      const res = await fetch('/api/courses?limit=200');
-      if (res.ok) {
-        const json = await res.json();
-        setCourses(json.data ?? []);
-      }
+  async function loadCourses() {
+    const res = await fetch('/api/courses?limit=200');
+    if (res.ok) {
+      const json = await res.json();
+      setCourses(json.data ?? []);
     }
-    loadCourses();
-  }, []);
+  }
+
+  useEffect(() => { loadUploads(page); }, [page]);
+  useEffect(() => { loadCourses(); }, []);
+
+  async function handleAddCourse(e: React.FormEvent) {
+    e.preventDefault();
+    setCourseError('');
+    setCourseLoading(true);
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(courseForm),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setCourseError(json.error ?? 'Failed to create course');
+        return;
+      }
+      const newCourse = json.data as Course;
+      setCourses((prev) => [...prev, newCourse]);
+      setSelectedCourse(newCourse.id);
+      setCourseForm({ name: '', code: '', school: '', department: '' });
+      setShowAddCourse(false);
+    } finally {
+      setCourseLoading(false);
+    }
+  }
 
   async function handleUpload(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedFile) return;
+    if (!selectedCourse) { setUploadError('Please select a course before uploading.'); return; }
     setUploadError('');
     setUploadSuccess('');
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append('file', selectedFile);
-      if (selectedCourse) fd.append('course_id', selectedCourse);
+      fd.append('course_id', selectedCourse);
       if (year) fd.append('year', year);
 
       const res = await fetch('/api/uploads', { method: 'POST', body: fd });
@@ -163,33 +188,96 @@ export default function UploadsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Course</label>
-                <select
-                  value={selectedCourse}
-                  onChange={(e) => setSelectedCourse(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Course <span className="text-red-500">*</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowAddCourse((v) => !v)}
+                  className="text-xs text-green-600 hover:text-green-700 font-medium"
                 >
-                  <option value="">Select course (optional)</option>
-                  {courses.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ''}</option>
-                  ))}
-                </select>
+                  {showAddCourse ? 'Cancel' : '+ Add new course'}
+                </button>
               </div>
+              <select
+                required
+                value={selectedCourse}
+                onChange={(e) => setSelectedCourse(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="">Select a course…</option>
+                {courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}{c.code ? ` (${c.code})` : ''} — {c.school}
+                  </option>
+                ))}
+              </select>
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Year</label>
-                <input
-                  type="number"
-                  min={1990}
-                  max={new Date().getFullYear()}
-                  value={year}
-                  onChange={(e) => setYear(e.target.value)}
-                  placeholder={`e.g. ${new Date().getFullYear() - 1}`}
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
+              {/* Inline course creation */}
+              {showAddCourse && (
+                <div className="mt-3 p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                  <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-3">New course</p>
+                  {courseError && (
+                    <p className="text-xs text-red-600 dark:text-red-400 mb-2">{courseError}</p>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      required={showAddCourse}
+                      value={courseForm.name}
+                      onChange={(e) => setCourseForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Course name *"
+                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <input
+                      type="text"
+                      value={courseForm.code}
+                      onChange={(e) => setCourseForm((f) => ({ ...f, code: e.target.value }))}
+                      placeholder="Course code (e.g. CSC301)"
+                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <input
+                      type="text"
+                      required={showAddCourse}
+                      value={courseForm.school}
+                      onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value }))}
+                      placeholder="University *"
+                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                    <input
+                      type="text"
+                      required={showAddCourse}
+                      value={courseForm.department}
+                      onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
+                      placeholder="Department *"
+                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    disabled={courseLoading}
+                    onClick={handleAddCourse}
+                    className="mt-3 px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    {courseLoading ? 'Creating…' : 'Create course'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Year</label>
+              <input
+                type="number"
+                min={1990}
+                max={new Date().getFullYear()}
+                value={year}
+                onChange={(e) => setYear(e.target.value)}
+                placeholder={`e.g. ${new Date().getFullYear() - 1}`}
+                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
             </div>
 
             <button
@@ -202,6 +290,7 @@ export default function UploadsPage() {
           </form>
         </div>
 
+        {/* Upload history */}
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
           <div className="px-5 py-4 border-b border-zinc-100 dark:border-zinc-800">
             <h2 className="font-semibold text-zinc-900 dark:text-white text-sm">My uploads ({total})</h2>
@@ -220,41 +309,39 @@ export default function UploadsPage() {
             </div>
           ) : (
             <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
-              {uploads.map((u) => (
-                <div key={u.id} className="px-5 py-4 flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="text-sm text-zinc-900 dark:text-white font-medium truncate">{u.original_name ?? 'Unnamed file'}</div>
-                    <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
-                      <span>{new Date(u.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                      {u.courses && <span>· {u.courses.name}{u.courses.code ? ` (${u.courses.code})` : ''}</span>}
-                      {u.questions_extracted > 0 && <span>· {u.questions_extracted} questions extracted</span>}
+              {uploads.map((u) => {
+                const s = getUploadStatus(u);
+                return (
+                  <div key={u.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm text-zinc-900 dark:text-white font-medium truncate">
+                        {u.original_name ?? 'Unnamed file'}
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <span>{new Date(u.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                        {u.courses && <span>· {u.courses.name}{u.courses.code ? ` (${u.courses.code})` : ''}</span>}
+                        {u.questions_extracted > 0 && <span>· {u.questions_extracted} questions extracted</span>}
+                        {u.processing_error && <span className="text-red-400">· {u.processing_error}</span>}
+                      </div>
                     </div>
-                  </div>
-                  {(() => { const s = getUploadStatus(u); return (
                     <span className={`shrink-0 px-2 py-1 rounded text-xs font-medium ${s.cls}`}>
                       {s.label}
                     </span>
-                  ); })()}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           )}
 
           {totalPages > 1 && (
             <div className="px-5 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
+              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+                className="px-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Previous
               </button>
               <span className="text-xs text-zinc-400">Page {page} of {totalPages}</span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-              >
+              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                className="px-3 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg disabled:opacity-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
                 Next
               </button>
             </div>

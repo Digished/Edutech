@@ -338,7 +338,7 @@ CREATE POLICY "admin_all_users"    ON public.users FOR ALL    USING (public.is_a
 
 -- ---- courses ----
 CREATE POLICY "courses_select_all"               ON public.courses FOR SELECT USING (true);
-CREATE POLICY "courses_insert_contributor_admin" ON public.courses FOR INSERT WITH CHECK (public.is_contributor_or_admin());
+CREATE POLICY "courses_insert_authenticated"     ON public.courses FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "courses_update_admin"             ON public.courses FOR UPDATE USING (public.is_admin());
 CREATE POLICY "courses_delete_admin"             ON public.courses FOR DELETE USING (public.is_admin());
 

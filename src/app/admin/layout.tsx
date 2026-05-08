@@ -9,13 +9,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
 
   useEffect(() => {
+    // Skip auth check on the login page itself
+    if (pathname === '/admin/login') { setChecking(false); return; }
     fetch('/api/auth/me').then(async (res) => {
-      if (!res.ok) { window.location.href = '/login'; return; }
+      if (!res.ok) { window.location.href = '/admin/login'; return; }
       const json = await res.json();
-      if (json.data?.role !== 'admin') { window.location.href = '/dashboard'; return; }
+      if (json.data?.role !== 'admin') { window.location.href = '/admin/login'; return; }
       setChecking(false);
-    }).catch(() => { window.location.href = '/login'; });
-  }, []);
+    }).catch(() => { window.location.href = '/admin/login'; });
+  }, [pathname]);
 
   if (checking) {
     return (
