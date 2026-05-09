@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import SearchSelect from '@/components/SearchSelect';
-import { ArrowLeftIcon, BookIcon, InboxIcon, SearchIcon } from '@/components/icons';
+import {
+  InboxIcon, LockIcon, SearchIcon, SparklesIcon,
+} from '@/components/icons';
 
 interface Course {
   id: string;
@@ -22,6 +24,7 @@ interface Question {
   correct_answer: string | null;
   year: number | null;
   question_type: 'mcq' | 'theory';
+  image_urls: string[] | null;
   courses: Course;
   question_analytics: { views_count: number }[] | { views_count: number } | null;
 }
@@ -52,6 +55,7 @@ export default function QuestionsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [school, setSchool] = useState('');
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
 
   const fetchCourses = useCallback(async () => {
     const params = new URLSearchParams({ limit: '100' });
@@ -63,6 +67,7 @@ export default function QuestionsPage() {
 
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
+    setSubscriptionRequired(false);
     try {
       let url: string;
       const params = new URLSearchParams({ page: String(page), limit: '20' });
@@ -76,6 +81,12 @@ export default function QuestionsPage() {
       }
 
       const res = await fetch(url);
+      if (res.status === 403) {
+        setSubscriptionRequired(true);
+        setQuestions([]);
+        setTotal(0);
+        return;
+      }
       const json = await res.json();
       setQuestions(json.data ?? []);
       setTotal(json.total ?? 0);
@@ -115,7 +126,7 @@ export default function QuestionsPage() {
       {/* Nav */}
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href={me ? '/dashboard' : '/'} className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
               <span className="text-white font-bold text-xs">E</span>
             </div>
@@ -190,7 +201,23 @@ export default function QuestionsPage() {
         </div>
 
         {/* Questions list */}
-        {loading ? (
+        {subscriptionRequired ? (
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-green-200 dark:border-green-900 p-8 text-center">
+            <span className="inline-flex w-12 h-12 rounded-full bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 items-center justify-center mb-3">
+              <LockIcon size={20} />
+            </span>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Subscribe to unlock the full bank</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
+              From ₦1,500 / month. Pay once and get every approved past question, AI-graded theory practice and more.
+            </p>
+            <Link
+              href="/dashboard/subscription"
+              className="inline-flex items-center gap-2 mt-5 bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm"
+            >
+              <SparklesIcon size={14} /> See plans
+            </Link>
+          </div>
+        ) : loading ? (
           <div className="space-y-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 animate-pulse">
@@ -221,16 +248,25 @@ export default function QuestionsPage() {
                 <p className="text-zinc-900 dark:text-white text-sm leading-relaxed font-medium whitespace-pre-line">
                   {q.question_text}
                 </p>
+                {Array.isArray(q.image_urls) && q.image_urls.length > 0 && (
+                  <div className="mt-3 flex gap-2 flex-wrap">
+                    {q.image_urls.slice(0, 3).map((url, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={`${url}-${i}`}
+                        src={url}
+                        alt=""
+                        className="h-24 w-auto max-w-full rounded-lg border border-zinc-200 dark:border-zinc-800 object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
                 {q.options && (
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {Object.entries(q.options).map(([key, val]) => (
                       <div
                         key={key}
-                        className={`text-xs px-3 py-1.5 rounded-lg border ${
-                          q.correct_answer === key
-                            ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400'
-                            : 'border-zinc-100 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400'
-                        }`}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-zinc-100 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400"
                       >
                         <span className="font-semibold">{key}.</span> {val}
                       </div>

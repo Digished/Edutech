@@ -124,6 +124,7 @@ export async function processUpload(uploadId: string): Promise<void> {
       content_hash: string;
       is_duplicate: boolean;
       duplicate_of: string | null;
+      has_figure: boolean;
     }[] = [];
 
     for (let i = 0; i < extractionResult.questions.length; i++) {
@@ -145,6 +146,7 @@ export async function processUpload(uploadId: string): Promise<void> {
         content_hash,
         is_duplicate: dupOf !== null,
         duplicate_of: dupOf,
+        has_figure: !!eq.has_figure,
       });
 
       const pct = 70 + Math.floor((25 * (i + 1)) / total);

@@ -3,13 +3,16 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole, getAuthUser } from '@/lib/utils/auth';
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
+import {
+  ok, badRequest, forbidden, unauthorized, notFound, serverError,
+} from '@/lib/utils/response';
 
 const updateSchema = z.object({
   question_text: z.string().min(5).optional(),
   options: z.record(z.string(), z.string()).nullable().optional(),
   correct_answer: z.string().nullable().optional(),
   year: z.number().int().min(1900).max(2100).nullable().optional(),
+  image_urls: z.array(z.string().url()).max(8).optional(),
 });
 
 export async function GET(
@@ -18,6 +21,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const { profile } = await getAuthUser();
+    if (!profile) return unauthorized('Sign in to view this question');
+
+    if (profile.role === 'student') {
+      const { data: hasSub } = await createAdminClient().rpc('has_active_subscription', {
+        p_user_id: profile.id,
+      });
+      if (!hasSub) {
+        return forbidden('Subscribe to unlock the full question bank');
+      }
+    }
+
     const supabase = await createClient();
 
     const { data, error } = await supabase

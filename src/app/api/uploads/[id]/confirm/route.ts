@@ -70,6 +70,7 @@ export async function POST(
           source_type: 'extracted',
           status: 'approved',
           content_hash: d.content_hash,
+          image_urls: d.image_urls ?? [],
         })
         .select('id, question_text, course_id')
         .single();

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
+import { gradeTheoryAnswer } from '@/lib/ocr/answers';
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
 
 const schema = z.object({
@@ -49,7 +50,7 @@ export async function POST(
     const supabase = await createClient();
     const { data: question } = await supabase
       .from('questions')
-      .select('id, question_type, correct_answer, is_deleted, status')
+      .select('id, question_text, question_type, options, correct_answer, is_deleted, status')
       .eq('id', id)
       .single();
 
@@ -59,11 +60,33 @@ export async function POST(
 
     let isCorrect: boolean | null = null;
     let normalizedAnswer = parsed.data.answer.trim();
+    let aiScore: number | null = null;
+    let aiFeedback: string | null = null;
+
     if (question.question_type === 'mcq') {
-      // Take the first character (A-Z), uppercase.
-      normalizedAnswer = normalizedAnswer.charAt(0).toUpperCase();
-      if (question.correct_answer) {
-        isCorrect = normalizedAnswer === question.correct_answer.trim().toUpperCase();
+      const expected = question.correct_answer?.trim() ?? null;
+      const givenLetter = normalizedAnswer.charAt(0).toUpperCase();
+      const matchLabel = expected ? givenLetter === expected.toUpperCase() : false;
+      const opts = question.options as Record<string, string> | null;
+      const matchValue = expected && opts && opts[expected]
+        ? opts[expected].trim().toLowerCase() === normalizedAnswer.toLowerCase()
+        : false;
+      isCorrect = expected ? matchLabel || matchValue : null;
+      normalizedAnswer = expected && (matchLabel || matchValue) ? expected : givenLetter;
+    } else {
+      // Theory — score with AI when we have something to grade.
+      try {
+        const grade = await gradeTheoryAnswer(
+          question.question_text,
+          normalizedAnswer,
+          question.correct_answer,
+        );
+        isCorrect = grade.is_correct;
+        aiScore = grade.score;
+        aiFeedback = grade.feedback;
+      } catch {
+        // Don't fail the attempt if the grader is down — record it ungraded.
+        isCorrect = null;
       }
     }
 
@@ -83,7 +106,7 @@ export async function POST(
       .single();
 
     if (dbError) return serverError(dbError.message);
-    return ok(data);
+    return ok({ ...data, ai_score: aiScore, ai_feedback: aiFeedback });
   } catch {
     return serverError();
   }

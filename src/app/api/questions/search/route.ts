@@ -1,11 +1,27 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { serverError, paginated, badRequest } from '@/lib/utils/response';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { requireRole } from '@/lib/utils/auth';
+import {
+  serverError, paginated, badRequest, forbidden, unauthorized,
+} from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
 
 // GET /api/questions/search?q=&course_id=&school=&department=&page=&limit=
 export async function GET(req: NextRequest) {
   try {
+    const { profile, error: authErr } = await requireRole(['student', 'contributor', 'admin']);
+    if (authErr || !profile) return unauthorized(authErr ?? 'Sign in to search');
+
+    if (profile.role === 'student') {
+      const { data: hasSub } = await createAdminClient().rpc('has_active_subscription', {
+        p_user_id: profile.id,
+      });
+      if (!hasSub) {
+        return forbidden('Subscribe to unlock the full question bank');
+      }
+    }
+
     const { searchParams } = req.nextUrl;
     const q = searchParams.get('q');
     const course_id = searchParams.get('course_id');
@@ -38,7 +54,12 @@ export async function GET(req: NextRequest) {
       .range(from, to);
 
     if (error) return serverError(error.message);
-    return paginated(data ?? [], count ?? 0, page, limit);
+    const sanitized = (data ?? []).map((row) => {
+      const { correct_answer: _omit, ...rest } = row as Record<string, unknown>;
+      void _omit;
+      return rest;
+    });
+    return paginated(sanitized, count ?? 0, page, limit);
   } catch {
     return serverError();
   }

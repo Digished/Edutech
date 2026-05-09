@@ -135,6 +135,9 @@ export interface Database {
           status: 'pending' | 'approved' | 'rejected';
           is_deleted: boolean;
           content_hash: string | null;
+          image_urls: Json | null;
+          explanation: string | null;
+          explanation_generated_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -150,6 +153,9 @@ export interface Database {
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
           content_hash?: string | null;
+          image_urls?: Json | null;
+          explanation?: string | null;
+          explanation_generated_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -164,7 +170,49 @@ export interface Database {
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
           content_hash?: string | null;
+          image_urls?: Json | null;
+          explanation?: string | null;
+          explanation_generated_at?: string | null;
           updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      practice_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          course_id: string | null;
+          question_type: string | null;
+          reveal_mode: string | null;
+          total_questions: number;
+          graded_count: number;
+          correct_count: number;
+          total_score: number | null;
+          duration_ms: number | null;
+          details: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          course_id?: string | null;
+          question_type?: string | null;
+          reveal_mode?: string | null;
+          total_questions: number;
+          graded_count?: number;
+          correct_count?: number;
+          total_score?: number | null;
+          duration_ms?: number | null;
+          details: Json;
+          created_at?: string;
+        };
+        Update: {
+          total_questions?: number;
+          graded_count?: number;
+          correct_count?: number;
+          total_score?: number | null;
+          duration_ms?: number | null;
+          details?: Json;
         };
         Relationships: EmptyRelationships;
       };
@@ -254,6 +302,8 @@ export interface Database {
           duplicate_of: string | null;
           excluded: boolean;
           confirmed: boolean;
+          image_urls: Json | null;
+          has_figure: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -271,6 +321,8 @@ export interface Database {
           duplicate_of?: string | null;
           excluded?: boolean;
           confirmed?: boolean;
+          image_urls?: Json | null;
+          has_figure?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -286,6 +338,8 @@ export interface Database {
           duplicate_of?: string | null;
           excluded?: boolean;
           confirmed?: boolean;
+          image_urls?: Json | null;
+          has_figure?: boolean;
           updated_at?: string;
         };
         Relationships: EmptyRelationships;
@@ -570,6 +624,81 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
+      payout_methods: {
+        Row: {
+          id: string;
+          user_id: string;
+          bank_code: string;
+          bank_name: string | null;
+          account_number: string;
+          account_name: string;
+          recipient_code: string | null;
+          is_default: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          bank_code: string;
+          bank_name?: string | null;
+          account_number: string;
+          account_name: string;
+          recipient_code?: string | null;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          bank_code?: string;
+          bank_name?: string | null;
+          account_number?: string;
+          account_name?: string;
+          recipient_code?: string | null;
+          is_default?: boolean;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          plan: 'monthly' | 'quarterly' | 'yearly';
+          status: 'pending' | 'active' | 'expired' | 'cancelled';
+          amount: number;
+          currency: string;
+          reference: string | null;
+          paystack_access_code: string | null;
+          starts_at: string | null;
+          ends_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          plan: 'monthly' | 'quarterly' | 'yearly';
+          status?: 'pending' | 'active' | 'expired' | 'cancelled';
+          amount: number;
+          currency?: string;
+          reference?: string | null;
+          paystack_access_code?: string | null;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: 'pending' | 'active' | 'expired' | 'cancelled';
+          reference?: string | null;
+          paystack_access_code?: string | null;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
     };
     Functions: {
       get_wallet_balance: {
@@ -579,6 +708,24 @@ export interface Database {
       increment_question_views: {
         Args: { p_question_id: string };
         Returns: undefined;
+      };
+      has_active_subscription: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
+      get_active_subscription: {
+        Args: { p_user_id: string };
+        Returns: {
+          id: string;
+          plan: 'monthly' | 'quarterly' | 'yearly';
+          status: 'pending' | 'active' | 'expired' | 'cancelled';
+          starts_at: string | null;
+          ends_at: string | null;
+        }[];
+      };
+      contributor_question_count: {
+        Args: { p_user_id: string };
+        Returns: number;
       };
     };
     Enums: Record<string, never>;

@@ -1,6 +1,12 @@
 import { BookIcon, CheckIcon, CoinIcon, SearchIcon, SparklesIcon, WalletIcon } from '@/components/icons';
+import { createClient } from '@/lib/supabase/server';
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isLoggedIn = !!user;
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 font-sans">
       {/* Nav */}
@@ -18,18 +24,29 @@ export default function Home() {
             <a href="#earn" className="hover:text-zinc-900 dark:hover:text-white transition-colors">Earn</a>
           </div>
           <div className="flex items-center gap-3">
-            <a
-              href="/login"
-              className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors px-3 py-2"
-            >
-              Log in
-            </a>
-            <a
-              href="/register"
-              className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              Get started
-            </a>
+            {isLoggedIn ? (
+              <a
+                href="/dashboard"
+                className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Open dashboard
+              </a>
+            ) : (
+              <>
+                <a
+                  href="/login"
+                  className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors px-3 py-2"
+                >
+                  Log in
+                </a>
+                <a
+                  href="/register"
+                  className="text-sm bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Get started
+                </a>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -51,10 +68,10 @@ export default function Home() {
         </p>
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           <a
-            href="/register"
+            href={isLoggedIn ? '/dashboard' : '/register'}
             className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-3 rounded-lg transition-colors text-sm"
           >
-            Start for free
+            {isLoggedIn ? 'Open dashboard' : 'Start for free'}
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
             </svg>
