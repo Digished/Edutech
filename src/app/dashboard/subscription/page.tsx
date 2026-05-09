@@ -48,7 +48,8 @@ const PLANS: PlanCard[] = [
 const CONTRIBUTOR_DISCOUNT = 0.6; // 60% off
 
 interface University { id: string; name: string; short_name: string | null }
-interface Department { id: string; name: string }
+interface Faculty   { id: string; name: string; university_id: string }
+interface Department { id: string; name: string; faculty_id?: string; faculties?: { id: string; name: string } | null }
 
 interface UnlockedDept {
   id: string;
@@ -73,8 +74,10 @@ function ngn(value: number): string {
 export default function SubscriptionPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [universities, setUniversities] = useState<University[]>([]);
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [school, setSchool] = useState('');
+  const [facultyId, setFacultyId] = useState('');
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan>('quarterly');
   const [loading, setLoading] = useState(true);
@@ -106,10 +109,28 @@ export default function SubscriptionPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // School → faculties list.
+  useEffect(() => {
+    if (!school) { setFaculties([]); setFacultyId(''); return; }
+    let cancelled = false;
+    fetch(`/api/faculties?university=${encodeURIComponent(school)}`).then(async (r) => {
+      if (cancelled) return;
+      if (r.ok) {
+        const j = await r.json();
+        setFaculties(j.data ?? []);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [school]);
+
+  // School (optionally narrowed by faculty) → department list.
   useEffect(() => {
     if (!school) { setDepartments([]); setSelectedDepts([]); return; }
     let cancelled = false;
-    fetch(`/api/departments?university=${encodeURIComponent(school)}`).then(async (r) => {
+    const url = facultyId
+      ? `/api/departments?faculty_id=${facultyId}`
+      : `/api/departments?university=${encodeURIComponent(school)}`;
+    fetch(url).then(async (r) => {
       if (cancelled) return;
       if (r.ok) {
         const j = await r.json();
@@ -117,7 +138,7 @@ export default function SubscriptionPage() {
       }
     });
     return () => { cancelled = true; };
-  }, [school]);
+  }, [school, facultyId]);
 
   const unlockedKeys = useMemo(() => {
     const set = new Set<string>();
@@ -151,7 +172,13 @@ export default function SubscriptionPage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           plan,
-          combos: pricing.eligible.map((d) => ({ school, department: d })),
+          combos: pricing.eligible.map((d) => {
+            const row = departments.find((r) => r.name === d);
+            const facultyName = row?.faculties?.name ?? null;
+            return facultyName
+              ? { school, faculty: facultyName, department: d }
+              : { school, department: d };
+          }),
         }),
       });
       const json = await res.json();
@@ -278,15 +305,29 @@ export default function SubscriptionPage() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">University</label>
-                <SearchSelect
-                  options={universities.map((u) => ({ value: u.name, label: u.name, hint: u.short_name ?? undefined }))}
-                  value={school}
-                  onChange={(v) => { setSchool(v); setSelectedDepts([]); }}
-                  placeholder="Pick a university"
-                  emptyText="No matching universities"
-                />
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">University</label>
+                  <SearchSelect
+                    options={universities.map((u) => ({ value: u.name, label: u.name, hint: u.short_name ?? undefined }))}
+                    value={school}
+                    onChange={(v) => { setSchool(v); setFacultyId(''); setSelectedDepts([]); }}
+                    placeholder="Pick a university"
+                    emptyText="No matching universities"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Faculty (optional)</label>
+                  <select
+                    value={facultyId}
+                    onChange={(e) => { setFacultyId(e.target.value); setSelectedDepts([]); }}
+                    disabled={!school || faculties.length === 0}
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-60"
+                  >
+                    <option value="">All faculties</option>
+                    {faculties.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div>

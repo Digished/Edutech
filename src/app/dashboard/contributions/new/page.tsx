@@ -35,6 +35,8 @@ export default function NewQuestionPage() {
   const [courseId, setCourseId] = useState('');
   const [questionText, setQuestionText] = useState('');
   const [year, setYear] = useState<number | ''>('');
+  const [level, setLevel] = useState<number | ''>('');
+  const [semester, setSemester] = useState<number | ''>('');
   const [questionType, setQuestionType] = useState<QType>('mcq');
   const [options, setOptions] = useState<{ key: string; value: string }[]>(
     DEFAULT_OPTIONS.map((k) => ({ key: k, value: '' })),
@@ -147,6 +149,8 @@ export default function NewQuestionPage() {
         question_text: questionText.trim(),
         question_type: questionType,
         year: year === '' ? null : Number(year),
+        level: level === '' ? null : Number(level),
+        semester: semester === '' ? null : Number(semester),
         image_urls: imageUrls,
       };
       if (questionType === 'mcq') {
@@ -377,15 +381,39 @@ export default function NewQuestionPage() {
             hint="Attach diagrams, charts or any image the question refers to. Up to 8 images, 5MB each."
           />
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Year (optional)</label>
-            <input
-              type="number" min={1990} max={2100}
-              value={year}
-              onChange={(e) => setYear(e.target.value === '' ? '' : Number(e.target.value))}
-              placeholder="e.g. 2023"
-              className="w-32 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Level</label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">Any</option>
+                {[100, 200, 300, 400, 500, 600].map((l) => <option key={l} value={l}>{l} level</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Semester</label>
+              <select
+                value={semester}
+                onChange={(e) => setSemester(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="">Any</option>
+                {[1, 2, 3].map((s) => <option key={s} value={s}>Semester {s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Year</label>
+              <input
+                type="number" min={1990} max={2100}
+                value={year}
+                onChange={(e) => setYear(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="e.g. 2023"
+                className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
           </div>
 
           <button

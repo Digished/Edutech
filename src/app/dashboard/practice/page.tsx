@@ -40,6 +40,8 @@ export default function PracticeSetupPage() {
 
   const [school, setSchool] = useState('');
   const [department, setDepartment] = useState('');
+  const [level, setLevel] = useState<number | ''>('');
+  const [semester, setSemester] = useState<number | ''>('');
   const [pickedCourseIds, setPickedCourseIds] = useState<string[]>([]);
   const [questionType, setQuestionType] = useState<'mcq' | 'theory' | 'all'>('all');
   const [reveal, setReveal] = useState<'after_each' | 'at_end'>('at_end');
@@ -117,6 +119,8 @@ export default function PracticeSetupPage() {
     const params = new URLSearchParams();
     if (pickedCourseIds.length > 0) params.set('course_ids', pickedCourseIds.join(','));
     if (questionType !== 'all') params.set('question_type', questionType);
+    if (level)    params.set('level', String(level));
+    if (semester) params.set('semester', String(semester));
     fetch(`/api/practice/available-count?${params}`).then(async (r) => {
       if (cancelled) return;
       if (r.ok) {
@@ -128,7 +132,7 @@ export default function PracticeSetupPage() {
       setAvailableLoading(false);
     });
     return () => { cancelled = true; };
-  }, [pickedCourseIds, questionType, statusLoading]);
+  }, [pickedCourseIds, questionType, level, semester, statusLoading]);
 
   const cap = available ?? 0;
   const requestedCount = Math.max(0, Math.min(MAX_COUNT, parseInt(countStr || '0', 10) || 0));
@@ -158,6 +162,8 @@ export default function PracticeSetupPage() {
       const params = new URLSearchParams({ limit: String(effectiveCount) });
       if (pickedCourseIds.length === 1) params.set('course_id', pickedCourseIds[0]);
       if (questionType !== 'all') params.set('question_type', questionType);
+      if (level)    params.set('level', String(level));
+      if (semester) params.set('semester', String(semester));
       const res = await fetch(`/api/questions?${params}&page=1`);
       const json = await res.json();
       let ids: string[] = (json.data ?? []).map((q: { id: string }) => q.id);
@@ -167,6 +173,8 @@ export default function PracticeSetupPage() {
         for (const cid of pickedCourseIds) {
           const p2 = new URLSearchParams({ limit: String(effectiveCount), course_id: cid });
           if (questionType !== 'all') p2.set('question_type', questionType);
+          if (level)    p2.set('level', String(level));
+          if (semester) p2.set('semester', String(semester));
           const r = await fetch(`/api/questions?${p2}&page=1`);
           if (r.ok) {
             const jj = await r.json();
@@ -311,6 +319,31 @@ export default function PracticeSetupPage() {
                   </select>
                 </div>
               )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Level</label>
+                  <select
+                    value={level}
+                    onChange={(e) => setLevel(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Any level</option>
+                    {[100, 200, 300, 400, 500, 600].map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Semester</label>
+                  <select
+                    value={semester}
+                    onChange={(e) => setSemester(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">Any semester</option>
+                    {[1, 2, 3].map((s) => <option key={s} value={s}>Semester {s}</option>)}
+                  </select>
+                </div>
+              </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">

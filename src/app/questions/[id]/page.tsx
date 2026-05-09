@@ -11,9 +11,11 @@ interface Question {
   options: Record<string, string> | null;
   correct_answer: string | null;
   year: number | null;
+  level: number | null;
+  semester: number | null;
   question_type: 'mcq' | 'theory';
   image_urls: string[] | null;
-  courses: { name: string; school: string; department: string; code: string | null } | null;
+  courses: { name: string; school: string; faculty: string | null; department: string; code: string | null } | null;
   question_analytics: { views_count: number }[];
 }
 
@@ -74,17 +76,23 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
   const [explanationLoading, setExplanationLoading] = useState(false);
   const [explanationError, setExplanationError] = useState('');
 
+  const [highYield, setHighYield] = useState<{
+    count: number; tagged: boolean; can_tag: boolean; can_untag: boolean; reason?: string;
+  }>({ count: 0, tagged: false, can_tag: false, can_untag: false });
+  const [highYieldBusy, setHighYieldBusy] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const meRes = await fetch('/api/auth/me');
       if (meRes.status === 401) { window.location.href = `/login?next=/questions/${id}`; return; }
 
-      const [qRes, aRes, cRes, eRes] = await Promise.all([
+      const [qRes, aRes, cRes, eRes, hyRes] = await Promise.all([
         fetch(`/api/questions/${id}`),
         fetch(`/api/questions/${id}/attempt`),
         fetch(`/api/questions/${id}/comments?limit=100`),
         fetch(`/api/questions/${id}/explain`),
+        fetch(`/api/questions/${id}/high-yield`),
       ]);
       const qJson = await qRes.json();
       const aJson = await aRes.json();
@@ -101,6 +109,10 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
         else setTheoryAnswer(a.answer);
       }
       setComments(sortComments(cJson.data ?? []));
+      if (hyRes.ok) {
+        const hyJson = await hyRes.json();
+        if (hyJson.data) setHighYield(hyJson.data);
+      }
     } finally {
       setLoading(false);
     }
@@ -185,6 +197,30 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
     }
   }
 
+  async function toggleHighYield() {
+    if (highYieldBusy) return;
+    if (!highYield.tagged && !highYield.can_tag) return;
+    setHighYieldBusy(true);
+    try {
+      const res = await fetch(`/api/questions/${id}/high-yield`, { method: 'POST' });
+      if (res.ok) {
+        const j = await res.json();
+        if (j.data) {
+          setHighYield((prev) => ({
+            ...prev,
+            tagged: j.data.tagged,
+            count: j.data.count,
+            can_tag: !j.data.tagged && prev.can_tag,
+            can_untag: j.data.tagged,
+            reason: undefined,
+          }));
+        }
+      }
+    } finally {
+      setHighYieldBusy(false);
+    }
+  }
+
   async function toggleUpvote(commentId: string) {
     setComments((prev) => sortComments(prev.map((c) => c.id === commentId ? {
       ...c,
@@ -254,7 +290,36 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-          <div className="flex items-center justify-end mb-2">
+          <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+            {/* High-yield tag — anyone with an active subscription on this department
+               can mark a question as high-yield. Each tag adds +0.2 to the
+               contributor's revenue weight on this question. */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleHighYield}
+                disabled={highYieldBusy || (!highYield.tagged && !highYield.can_tag)}
+                title={highYield.reason}
+                aria-pressed={highYield.tagged}
+                className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${
+                  highYield.tagged
+                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-300/60 dark:border-amber-700/60'
+                    : highYield.can_tag
+                    ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 hover:border-amber-300 hover:text-amber-700'
+                    : 'bg-zinc-50 dark:bg-zinc-800/60 text-zinc-400 dark:text-zinc-500 border border-zinc-200/60 dark:border-zinc-800 cursor-not-allowed'
+                }`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2l2.39 6.95H21l-5.6 4.07L17.78 20 12 15.9 6.22 20l2.39-6.98L3 8.95h6.61L12 2z" />
+                </svg>
+                {highYield.tagged ? 'High yield' : 'Mark high yield'}
+                {highYield.count > 0 && (
+                  <span className="ml-1 text-[10px] font-semibold tabular-nums px-1 py-0.5 rounded bg-white/40 dark:bg-zinc-900/40">
+                    {highYield.count}
+                  </span>
+                )}
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setFlagOpen(true)}
@@ -277,6 +342,8 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
               </span>
             )}
             {question.year && <span className="text-xs text-zinc-400">· {question.year}</span>}
+            {question.level && <span className="text-xs text-zinc-400">· {question.level} level</span>}
+            {question.semester && <span className="text-xs text-zinc-400">· Sem {question.semester}</span>}
           </div>
 
           <p className="text-zinc-900 dark:text-white leading-relaxed font-medium whitespace-pre-line">

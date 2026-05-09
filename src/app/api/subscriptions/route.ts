@@ -13,6 +13,7 @@ import { getPagination } from '@/lib/utils/pagination';
 const comboSchema = z.object({
   school: z.string().min(2),
   department: z.string().min(2),
+  faculty: z.string().min(2).optional(),
 });
 
 const schema = z.object({
@@ -94,17 +95,56 @@ export async function POST(req: NextRequest) {
     const freshPricing = priceBundle(parsed.data.plan, fresh.length, isContributor);
     const freshPerRow = paidShareForCombo(parsed.data.plan, fresh.length, isContributor);
 
-    const rows = fresh.map((c) => ({
-      user_id: authUser.id,
-      plan: parsed.data.plan,
-      amount: freshPerRow,
-      currency: 'NGN',
-      reference,
-      status: 'pending' as const,
-      school: c.school,
-      department: c.department,
-      contributor_discount_applied: isContributor,
-    }));
+    // Resolve denormalised FK ids + faculty name for each combo so the
+    // subscription row carries a full pointer into the new hierarchy.
+    const enriched = await Promise.all(
+      fresh.map(async (c) => {
+        const { data: uni } = await admin
+          .from('universities').select('id').eq('name', c.school).single();
+        let universityId: string | null = uni?.id ?? null;
+        let facultyId: string | null = null;
+        let facultyName: string | null = c.faculty ?? null;
+        let departmentId: string | null = null;
+
+        if (universityId) {
+          // Find the department's faculty by joining through faculties.
+          const { data: facultyRows } = await admin
+            .from('faculties').select('id, name').eq('university_id', universityId);
+          for (const f of facultyRows ?? []) {
+            if (c.faculty && f.name !== c.faculty) continue;
+            const { data: dept } = await admin
+              .from('departments')
+              .select('id')
+              .eq('faculty_id', f.id)
+              .eq('name', c.department)
+              .maybeSingle();
+            if (dept) {
+              facultyId = f.id;
+              facultyName = f.name;
+              departmentId = dept.id;
+              break;
+            }
+          }
+        }
+
+        return {
+          user_id: authUser.id,
+          plan: parsed.data.plan,
+          amount: freshPerRow,
+          currency: 'NGN',
+          reference,
+          status: 'pending' as const,
+          university_id: universityId,
+          faculty_id: facultyId,
+          department_id: departmentId,
+          school: c.school,
+          faculty: facultyName,
+          department: c.department,
+          contributor_discount_applied: isContributor,
+        };
+      }),
+    );
+    const rows = enriched;
 
     const { data: insertedRows, error: insertErr } = await admin
       .from('subscriptions')

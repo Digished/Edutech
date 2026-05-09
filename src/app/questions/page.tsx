@@ -24,6 +24,8 @@ interface Question {
   options: Record<string, string> | null;
   correct_answer: string | null;
   year: number | null;
+  level: number | null;
+  semester: number | null;
   question_type: 'mcq' | 'theory';
   image_urls: string[] | null;
   courses: Course;
@@ -61,6 +63,8 @@ export default function QuestionsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [school, setSchool] = useState('');
+  const [level, setLevel] = useState<number | ''>('');
+  const [semester, setSemester] = useState<number | ''>('');
   const [subscriptionRequired, setSubscriptionRequired] = useState(false);
 
   const fetchCourses = useCallback(async () => {
@@ -78,6 +82,9 @@ export default function QuestionsPage() {
       let url: string;
       const params = new URLSearchParams({ page: String(page), limit: '20' });
       if (selectedCourse) params.set('course_id', selectedCourse);
+      if (school)    params.set('school', school);
+      if (level)     params.set('level', String(level));
+      if (semester)  params.set('semester', String(semester));
 
       if (search.trim().length >= 3) {
         params.set('q', search);
@@ -99,7 +106,7 @@ export default function QuestionsPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, selectedCourse]);
+  }, [page, search, selectedCourse, school, level, semester]);
 
   useEffect(() => { fetchCourses(); }, [fetchCourses]);
   useEffect(() => { fetchQuestions(); }, [fetchQuestions]);
@@ -206,6 +213,22 @@ export default function QuestionsPage() {
               placeholder="All courses"
               emptyText="No matching courses"
             />
+            <select
+              value={level}
+              onChange={(e) => { setLevel(e.target.value === '' ? '' : Number(e.target.value)); setPage(1); }}
+              className="sm:w-32 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="">Any level</option>
+              {[100, 200, 300, 400, 500, 600].map((l) => <option key={l} value={l}>{l} level</option>)}
+            </select>
+            <select
+              value={semester}
+              onChange={(e) => { setSemester(e.target.value === '' ? '' : Number(e.target.value)); setPage(1); }}
+              className="sm:w-40 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="">Any semester</option>
+              {[1, 2, 3].map((s) => <option key={s} value={s}>Semester {s}</option>)}
+            </select>
           </div>
         </div>
 
@@ -303,6 +326,8 @@ export default function QuestionsPage() {
                     {q.courses?.name ?? 'Unknown course'}
                   </span>
                   {q.year && <span>{q.year}</span>}
+                  {q.level && <span>{q.level}L</span>}
+                  {q.semester && <span>S{q.semester}</span>}
                   <span>{viewsOf(q)} views</span>
                   <span className="text-zinc-300 dark:text-zinc-600">{q.courses?.school}</span>
                 </div>

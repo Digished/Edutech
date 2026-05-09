@@ -1,10 +1,13 @@
 // ============================================================
 // Contribution Reward Engine
-// Calculates per-user payouts from the revenue pool
+// Calculates per-user payouts from the revenue pool.
+// High-yield tags add +HIGH_YIELD_BONUS_PER_TAG to a contributor's
+// effective weight on each question they contributed to.
 // ============================================================
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateReference } from '@/lib/utils/hash';
+import { HIGH_YIELD_BONUS_PER_TAG } from '@/types/database';
 
 export interface ContributorShare {
   user_id: string;
@@ -14,7 +17,6 @@ export interface ContributorShare {
   payout_amount: number;
 }
 
-// Contribution type weights
 const WEIGHTS: Record<string, number> = {
   upload: 1.0,
   extraction: 1.0,
@@ -52,16 +54,42 @@ export async function calculateContributorShares(
 
   if (!contributions?.length) return [];
 
+  // Live count of high-yield tags per question.
+  const questionIds = Array.from(
+    new Set(
+      contributions
+        .map((c) => (c.questions as unknown as { id: string })?.id)
+        .filter(Boolean),
+    ),
+  );
+
+  const tagCountByQuestion = new Map<string, number>();
+  if (questionIds.length) {
+    const { data: tags } = await supabase
+      .from('high_yield_tags')
+      .select('question_id')
+      .in('question_id', questionIds);
+    for (const t of tags ?? []) {
+      tagCountByQuestion.set(t.question_id, (tagCountByQuestion.get(t.question_id) ?? 0) + 1);
+    }
+  }
+
   const userScores = new Map<string, { weighted: number; views: number }>();
 
   for (const c of contributions) {
     const typeWeight = WEIGHTS[c.contribution_type] ?? 1.0;
-    const effectiveWeight = c.contribution_weight * typeWeight;
 
     const question = c.questions as unknown as {
       id: string;
       question_analytics: { views_count: number }[];
     };
+    const tagCount = tagCountByQuestion.get(question.id) ?? 0;
+    const tagBonus = tagCount * HIGH_YIELD_BONUS_PER_TAG;
+
+    // Base weight ≤ 1.0 from the contribution row, scaled by type, plus the
+    // live high-yield bonus. Effective weight scales linearly with tags.
+    const effectiveWeight = c.contribution_weight * typeWeight * (1 + tagBonus);
+
     const viewsCount = question?.question_analytics?.[0]?.views_count ?? 0;
 
     const current = userScores.get(c.user_id) ?? { weighted: 0, views: 0 };
@@ -81,7 +109,6 @@ export async function calculateContributorShares(
   for (const [user_id, scores] of userScores.entries()) {
     const weightedFraction = totalWeighted > 0 ? scores.weighted / totalWeighted : 0;
     const viewsFraction = totalViews > 0 ? scores.views / totalViews : 0;
-    // 60% weight-based, 40% views-based
     const totalScore = weightedFraction * 0.6 + viewsFraction * 0.4;
     const payout_amount = parseFloat((totalScore * poolAmount).toFixed(2));
 
@@ -120,13 +147,11 @@ export async function distributeRevenuePool(poolId: string): Promise<number> {
 
   await supabase.from('wallet_ledger').insert(ledgerEntries);
 
-  // Mark pool as distributed
   await supabase
     .from('revenue_pool')
     .update({ distributed: true, distributed_at: new Date().toISOString() })
     .eq('id', poolId);
 
-  // Send notifications
   const notifications = shares.map((share) => ({
     user_id: share.user_id,
     title: 'Earnings Credited',

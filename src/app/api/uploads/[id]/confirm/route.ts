@@ -20,7 +20,7 @@ export async function POST(
 
     const { data: upload } = await supabase
       .from('uploads')
-      .select('id, user_id, course_id, needs_review, processing_stage')
+      .select('id, user_id, course_id, level, semester, needs_review, processing_stage')
       .eq('id', id)
       .single();
     if (!upload) return notFound('Upload not found');
@@ -67,6 +67,8 @@ export async function POST(
           options: d.question_type === 'mcq' ? d.options : null,
           correct_answer: d.correct_answer,
           year: d.year,
+          level: upload.level ?? null,
+          semester: upload.semester ?? null,
           source_type: 'extracted',
           status: 'approved',
           content_hash: d.content_hash,
