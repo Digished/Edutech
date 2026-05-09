@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeftIcon, CheckIcon, XIcon } from '@/components/icons';
+import { Brand } from '@/components/Logo';
 
 interface ActivatedRow {
   id: string;
@@ -44,15 +45,16 @@ function VerifyInner() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-2xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 inline-flex items-center gap-1.5">
+      <nav className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white inline-flex items-center gap-1.5 transition-colors">
             <ArrowLeftIcon size={14} /> Dashboard
           </Link>
+          <Brand size="sm" href="/dashboard" />
         </div>
       </nav>
 
-      <div className="max-w-md mx-auto px-6 py-12">
+      <div className="max-w-md mx-auto px-4 sm:px-6 py-12">
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 text-center">
           {state.kind === 'verifying' && (
             <>

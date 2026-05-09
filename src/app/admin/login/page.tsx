@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import PasswordInput from '@/components/PasswordInput';
+import { Brand } from '@/components/Logo';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
@@ -37,13 +38,10 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-green-600 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">E</span>
-            </div>
-            <span className="font-semibold text-zinc-900 dark:text-white text-lg">EduTech</span>
-          </Link>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Admin access</h1>
+          <div className="flex justify-center mb-6">
+            <Brand size="md" />
+          </div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Admin access</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Enter the admin email and password configured in your environment
           </p>

@@ -6,6 +6,7 @@ import {
   ArrowLeftIcon, ArrowRightIcon, AlertTriangleIcon, CheckIcon, PlusIcon, SparklesIcon, TrashIcon,
 } from '@/components/icons';
 import ImageUploader from '@/components/ImageUploader';
+import { Brand } from '@/components/Logo';
 
 interface Extraction {
   id: string;
@@ -114,24 +115,18 @@ export default function ReviewExtractionsPage({
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/dashboard/uploads" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+      <nav className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <Link href="/dashboard/uploads" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors">
             <ArrowLeftIcon size={14} /> Uploads
           </Link>
-          <span className="text-zinc-300 dark:text-zinc-700">|</span>
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-green-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">E</span>
-            </div>
-            <span className="font-semibold text-zinc-900 dark:text-white text-sm">EduTech</span>
-          </Link>
+          <Brand size="sm" href="/dashboard" />
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Review extracted questions</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">Review extracted questions</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Edit anything you need to fix, attach images for any figure-based questions,
             and delete the ones you don&apos;t want to publish. Duplicates of existing

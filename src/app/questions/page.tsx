@@ -6,6 +6,7 @@ import SearchSelect from '@/components/SearchSelect';
 import {
   InboxIcon, LockIcon, SearchIcon, SparklesIcon,
 } from '@/components/icons';
+import { Brand } from '@/components/Logo';
 
 interface Course {
   id: string;
@@ -137,21 +138,16 @@ export default function QuestionsPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Nav */}
-      <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href={me ? '/dashboard' : '/'} className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">E</span>
-            </div>
-            <span className="font-semibold text-zinc-900 dark:text-white">EduTech</span>
-          </Link>
-          <div className="flex items-center gap-3">
+      <nav className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <Brand size="sm" href={me ? '/dashboard' : '/'} />
+          <div className="flex items-center gap-3 min-w-0">
             {me ? (
               <>
                 <Link href="/dashboard" className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
                   Dashboard
                 </Link>
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                <span className="text-sm text-zinc-500 dark:text-zinc-400 truncate max-w-[10rem] hidden sm:inline">
                   {me.full_name ?? me.email}
                 </span>
               </>
@@ -160,7 +156,7 @@ export default function QuestionsPage() {
                 <Link href="/login" className="text-sm text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-colors">
                   Log in
                 </Link>
-                <Link href="/register" className="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                <Link href="/register" className="text-sm bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg transition-colors font-medium">
                   Sign up
                 </Link>
               </>
@@ -169,9 +165,9 @@ export default function QuestionsPage() {
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Question Bank</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">Question Bank</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">{total.toLocaleString()} questions available</p>
         </div>
 

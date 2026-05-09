@@ -88,7 +88,7 @@ export default function AdminDepartmentsPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Departments</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Each department belongs to a university.</p>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, TrashIcon, TrophyIcon, XIcon,
 } from '@/components/icons';
+import { Brand } from '@/components/Logo';
 
 interface Detail {
   question_id: string;
@@ -94,15 +95,16 @@ export default function PracticeHistoryDetailPage({
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/dashboard/practice/history" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 inline-flex items-center gap-1.5">
+      <nav className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <Link href="/dashboard/practice/history" className="text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white inline-flex items-center gap-1.5 transition-colors">
             <ArrowLeftIcon size={14} /> History
           </Link>
+          <Brand size="sm" href="/dashboard" />
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-6 py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-6 mb-6">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
