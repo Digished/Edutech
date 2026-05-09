@@ -15,6 +15,7 @@ import {
   PlayIcon,
   SparklesIcon,
 } from '@/components/icons';
+import { Brand } from '@/components/Logo';
 
 interface UserProfile {
   id: string;
@@ -164,14 +165,9 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       {/* Nav — logo points to /dashboard so logged-in users stay logged in. */}
       <nav className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-20">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">E</span>
-            </div>
-            <span className="font-semibold text-zinc-900 dark:text-white">EduTech</span>
-          </Link>
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          <Brand size="sm" href="/dashboard" />
+          <div className="flex items-center gap-3 min-w-0">
             <span className="hidden sm:inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
               <span
                 className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium ${
@@ -191,7 +187,7 @@ export default function DashboardPage() {
                   {unlocked.length} unlocked
                 </span>
               )}
-              <span className="text-zinc-400">{user.email}</span>
+              <span className="text-zinc-400 truncate max-w-[12rem]">{user.email}</span>
             </span>
             <button
               onClick={handleLogout}
@@ -203,9 +199,9 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-6">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
         <div className="mb-6">
-          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white">
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">
             Hello, {firstName}
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">

@@ -75,7 +75,7 @@ export default function AdminUniversitiesPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Universities</h1>
         <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Manage the list shown in dropdowns when creating courses or users.</p>

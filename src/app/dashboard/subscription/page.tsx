@@ -6,6 +6,7 @@ import {
   ArrowLeftIcon, ArrowRightIcon, CheckIcon, LockIcon, PlusIcon, SparklesIcon, TrashIcon,
 } from '@/components/icons';
 import SearchSelect from '@/components/SearchSelect';
+import { Brand } from '@/components/Logo';
 
 type Plan = 'monthly' | 'quarterly' | 'yearly';
 
@@ -190,15 +191,16 @@ export default function SubscriptionPage() {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
-        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 inline-flex items-center gap-1.5">
+      <nav className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <Link href="/dashboard" className="text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white inline-flex items-center gap-1.5 transition-colors">
             <ArrowLeftIcon size={14} /> Dashboard
           </Link>
+          <Brand size="sm" href="/dashboard" />
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-6 py-8">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="flex items-center gap-3 mb-6">
           <span className="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 flex items-center justify-center">
             <SparklesIcon size={18} />

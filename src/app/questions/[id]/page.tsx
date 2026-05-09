@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { ArrowLeftIcon, CheckIcon, FlagIcon, PinIcon, XIcon, ChevronUpIcon } from '@/components/icons';
+import { Brand } from '@/components/Logo';
 
 interface Question {
   id: string;
@@ -242,15 +243,16 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link href="/questions" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white">
+      <nav className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <Link href="/questions" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors">
             <ArrowLeftIcon size={14} /> Question bank
           </Link>
+          <Brand size="sm" href="/dashboard" />
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
           <div className="flex items-center justify-end mb-2">
             <button

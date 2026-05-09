@@ -196,7 +196,7 @@ export async function POST(req: NextRequest) {
         source: 'balance',
         amount: Math.round(amount * 100), // kobo
         recipient: recipient_code,
-        reason: `EduTech withdrawal`,
+        reason: `Examspace withdrawal`,
         reference,
       });
 

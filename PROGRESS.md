@@ -1,4 +1,4 @@
-# EduTech — Project Progress
+# Examspace — Project Progress
 
 A crowdsourced exam question bank for Nigerian students. Production-ready Next.js 16 + Supabase + Paystack stack.
 

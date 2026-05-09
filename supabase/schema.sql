@@ -1,5 +1,5 @@
 -- ============================================================
--- EduTech Exam Question Bank - Full Supabase Schema
+-- Examspace Exam Question Bank - Full Supabase Schema
 -- ============================================================
 
 -- Enable required extensions
