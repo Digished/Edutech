@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
 import {
-  created, badRequest, unauthorized, serverError, paginated,
+  created, badRequest, forbidden, unauthorized, serverError, paginated,
 } from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
 import { hashQuestionText } from '@/lib/utils/hash';
@@ -13,6 +13,7 @@ import { detectDuplicates, findDuplicateMatch } from '@/lib/dedup/similarity';
 const schema = z.object({
   course_id: z.string().uuid(),
   question_text: z.string().min(5),
+  question_type: z.enum(['mcq', 'theory']).default('mcq'),
   options: z
     .record(z.string(), z.string())
     .nullable()
@@ -21,11 +22,25 @@ const schema = z.object({
   year: z.number().int().min(1900).max(2100).nullable().optional(),
 });
 
-// GET /api/questions?course_id=&year=&page=&limit= — auth required
+const CONTRIBUTOR_PROMOTION_THRESHOLD = 100;
+
+// GET /api/questions?course_id=&year=&page=&limit= — auth + active subscription required
+// (contributors and admins always have access).
 export async function GET(req: NextRequest) {
   try {
     const { profile, error: authErr } = await requireRole(['student', 'contributor', 'admin']);
     if (authErr || !profile) return unauthorized(authErr ?? 'Sign in to browse questions');
+
+    const requiresSubscription = profile.role === 'student';
+    if (requiresSubscription) {
+      const admin = createAdminClient();
+      const { data: hasSub } = await admin.rpc('has_active_subscription', {
+        p_user_id: profile.id,
+      });
+      if (!hasSub) {
+        return forbidden('Subscribe to unlock the full question bank');
+      }
+    }
 
     const { searchParams } = req.nextUrl;
     const course_id = searchParams.get('course_id');
@@ -62,17 +77,22 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/questions — contributor or admin
+// POST /api/questions — students may submit (for review); they get the contributor
+// role once they have 100 approved upload/extraction contributions.
 export async function POST(req: NextRequest) {
   try {
-    const { profile, error } = await requireRole(['contributor', 'admin']);
+    const { profile, error } = await requireRole(['student', 'contributor', 'admin']);
     if (error || !profile) return unauthorized(error ?? 'Unauthorized');
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
-    const { course_id, question_text, options, correct_answer, year } = parsed.data;
+    const { course_id, question_text, question_type, options, correct_answer, year } = parsed.data;
+    if (question_type === 'mcq' && (!options || Object.keys(options).length < 2)) {
+      return badRequest('Add at least two options for an MCQ');
+    }
+
     const content_hash = hashQuestionText(question_text);
 
     const adminSupabase = createAdminClient();
@@ -91,7 +111,8 @@ export async function POST(req: NextRequest) {
       .insert({
         course_id,
         question_text,
-        options: options ?? null,
+        question_type,
+        options: question_type === 'mcq' ? options ?? null : null,
         correct_answer: correct_answer ?? null,
         year: year ?? null,
         source_type: 'manual',
@@ -114,12 +135,24 @@ export async function POST(req: NextRequest) {
     // Async duplicate detection (don't block response)
     detectDuplicates(question.id, question_text, course_id).catch(() => null);
 
-    // Auto-promote to contributor role if student
+    // Promote a student to contributor only once they've crossed the threshold
+    // of approved upload/extraction contributions.
     if (profile.role === 'student') {
-      await adminSupabase
-        .from('users')
-        .update({ role: 'contributor' })
-        .eq('id', profile.id);
+      const { data: count } = await adminSupabase.rpc('contributor_question_count', {
+        p_user_id: profile.id,
+      });
+      if (typeof count === 'number' && count >= CONTRIBUTOR_PROMOTION_THRESHOLD) {
+        await adminSupabase
+          .from('users')
+          .update({ role: 'contributor' })
+          .eq('id', profile.id);
+        await adminSupabase.from('notifications').insert({
+          user_id: profile.id,
+          title: 'You’re now a contributor',
+          body: 'You’ve hit 100 approved contributions. Your wallet is now unlocked and you can withdraw earnings.',
+          type: 'role_promotion',
+        });
+      }
     }
 
     return created(question, 'Question submitted for review');

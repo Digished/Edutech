@@ -59,7 +59,19 @@ function PracticeRunInner() {
   const [committed, setCommitted] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [finished, setFinished] = useState<{ correct: number; total: number; details: { id: string; correct: boolean | null; given: string; expected: string | null }[] } | null>(null);
+  const [finished, setFinished] = useState<{
+    correct: number;
+    total: number;
+    details: {
+      id: string;
+      correct: boolean | null;
+      given: string;
+      expected: string | null;
+      score: number | null;
+      feedback: string | null;
+      type: 'mcq' | 'theory';
+    }[];
+  } | null>(null);
 
   useEffect(() => {
     const s = loadSession();
@@ -140,16 +152,78 @@ function PracticeRunInner() {
     try {
       const details = await Promise.all(
         s.ids.map(async (qid) => {
-          const given = s.answers[qid] ?? '';
-          if (!given) return { id: qid, correct: null, given, expected: null };
-          const res = await fetch(`/api/questions/${qid}`);
-          const json = await res.json();
-          const q: Question | null = json.data ?? null;
-          if (!q) return { id: qid, correct: null, given, expected: null };
-          if (q.question_type === 'mcq' && q.correct_answer) {
-            return { id: qid, correct: given === q.correct_answer, given, expected: q.correct_answer };
+          const given = (s.answers[qid] ?? '').trim();
+          const baseRes = await fetch(`/api/questions/${qid}`);
+          const baseJson = await baseRes.json();
+          const q: Question | null = baseJson.data ?? null;
+          if (!q) {
+            return {
+              id: qid,
+              correct: null,
+              given,
+              expected: null,
+              score: null,
+              feedback: null,
+              type: 'mcq' as const,
+            };
           }
-          return { id: qid, correct: null, given, expected: null };
+
+          // MCQ: case-insensitive label match, also accept the option text.
+          if (q.question_type === 'mcq') {
+            const expected = q.correct_answer ?? null;
+            if (!given) {
+              return { id: qid, correct: false, given, expected, score: 0, feedback: null, type: 'mcq' as const };
+            }
+            const givenLetter = given.charAt(0).toUpperCase();
+            const matchByLabel = expected ? givenLetter === expected.trim().toUpperCase() : false;
+            const matchByValue = expected && q.options
+              ? Object.entries(q.options).some(
+                  ([k, v]) =>
+                    k === expected && v.trim().toLowerCase() === given.toLowerCase(),
+                )
+              : false;
+            const correct = expected ? matchByLabel || matchByValue : null;
+            return {
+              id: qid,
+              correct,
+              given,
+              expected,
+              score: correct === null ? null : correct ? 1 : 0,
+              feedback: null,
+              type: 'mcq' as const,
+            };
+          }
+
+          // Theory: ask the AI to grade closeness.
+          if (!given) {
+            return {
+              id: qid, correct: false, given, expected: q.correct_answer,
+              score: 0, feedback: 'No answer provided.', type: 'theory' as const,
+            };
+          }
+          try {
+            const gradeRes = await fetch('/api/questions/grade-theory', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question_id: qid, answer: given }),
+            });
+            if (!gradeRes.ok) throw new Error('grade failed');
+            const gradeJson = await gradeRes.json();
+            const grade = gradeJson.data as { score: number; is_correct: boolean; feedback: string };
+            return {
+              id: qid,
+              correct: grade.is_correct,
+              given,
+              expected: q.correct_answer,
+              score: grade.score,
+              feedback: grade.feedback,
+              type: 'theory' as const,
+            };
+          } catch {
+            return {
+              id: qid, correct: null, given, expected: q.correct_answer,
+              score: null, feedback: 'AI grader unavailable — review manually.', type: 'theory' as const,
+            };
+          }
         }),
       );
       const correct = details.filter((d) => d.correct === true).length;
@@ -165,8 +239,9 @@ function PracticeRunInner() {
   }
 
   if (finished) {
-    const gradable = finished.details.filter((d) => d.correct !== null).length;
-    const score = gradable > 0 ? Math.round((finished.correct / gradable) * 100) : null;
+    const gradable = finished.details.filter((d) => d.score !== null).length;
+    const totalScore = finished.details.reduce((s, d) => s + (d.score ?? 0), 0);
+    const percent = gradable > 0 ? Math.round((totalScore / gradable) * 100) : null;
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
         <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800">
@@ -185,12 +260,12 @@ function PracticeRunInner() {
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
               {gradable > 0 ? (
                 <>
-                  You scored{' '}
-                  <span className="font-semibold text-green-700 dark:text-green-400">{finished.correct}</span>
-                  {' '}/ {gradable} graded MCQ{gradable === 1 ? '' : 's'} · {score}%
+                  Overall score{' '}
+                  <span className="font-semibold text-green-700 dark:text-green-400">{percent}%</span>
+                  {' '}across {gradable} graded question{gradable === 1 ? '' : 's'} ({finished.correct} fully correct)
                 </>
               ) : (
-                <>All questions submitted. Theory questions aren&apos;t auto-graded.</>
+                <>All questions submitted. Some couldn&apos;t be auto-graded.</>
               )}
             </p>
           </div>
@@ -200,19 +275,39 @@ function PracticeRunInner() {
             {finished.details.map((d, i) => (
               <Link key={d.id} href={`/questions/${d.id}`}
                 className="block bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 hover:border-green-300 transition-colors">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium text-zinc-900 dark:text-white">Question {i + 1}</span>
-                  {d.correct === true && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400">
-                      <CheckIcon size={14} /> Correct
-                    </span>
-                  )}
-                  {d.correct === false && (
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400">
-                      <XIcon size={14} /> {d.given || '—'} · correct: {d.expected}
-                    </span>
-                  )}
-                  {d.correct === null && <span className="text-xs text-zinc-400">Ungraded · view</span>}
+                <div className="flex items-start justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <div className="font-medium text-zinc-900 dark:text-white">Question {i + 1}</div>
+                    {d.feedback && (
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{d.feedback}</div>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    {d.type === 'theory' && d.score !== null ? (
+                      <span
+                        className={`inline-flex items-center gap-1 text-xs font-semibold ${
+                          d.score >= 0.6
+                            ? 'text-green-700 dark:text-green-400'
+                            : d.score >= 0.3
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-red-600 dark:text-red-400'
+                        }`}
+                      >
+                        {Math.round(d.score * 100)}%
+                      </span>
+                    ) : d.correct === true ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 dark:text-green-400">
+                        <CheckIcon size={14} /> Correct
+                      </span>
+                    ) : d.correct === false ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400">
+                        <XIcon size={14} /> {d.given || '—'}
+                        {d.expected ? <> · ans: {d.expected}</> : null}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-400">Ungraded · view</span>
+                    )}
+                  </div>
                 </div>
               </Link>
             ))}

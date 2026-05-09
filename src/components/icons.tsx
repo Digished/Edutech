@@ -119,3 +119,28 @@ export function SparklesIcon(p: IconProps) { return (
 export function ClockIcon(p: IconProps) { return (
   <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
 ); }
+
+export function EyeIcon(p: IconProps) { return (
+  <svg {...base(p)}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+); }
+
+export function EyeOffIcon(p: IconProps) { return (
+  <svg {...base(p)}>
+    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-6.5 0-10-7-10-7a18.4 18.4 0 0 1 4.18-5.19" />
+    <path d="M9.9 4.24A10.36 10.36 0 0 1 12 4c6.5 0 10 7 10 7a18.5 18.5 0 0 1-2.16 3.19" />
+    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+    <path d="m1 1 22 22" />
+  </svg>
+); }
+
+export function PlusIcon(p: IconProps) { return (
+  <svg {...base(p)}><path d="M12 5v14" /><path d="M5 12h14" /></svg>
+); }
+
+export function ZapIcon(p: IconProps) { return (
+  <svg {...base(p)}><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z" /></svg>
+); }
+
+export function LockIcon(p: IconProps) { return (
+  <svg {...base(p)}><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+); }

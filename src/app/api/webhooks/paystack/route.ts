@@ -131,13 +131,47 @@ async function handleChargeSuccess(
   const reference = data.reference as string;
   const amountKobo = data.amount as number;
   const metadata = data.metadata as Record<string, unknown> | undefined;
+  const purpose = metadata?.purpose as string | undefined;
   const userId = metadata?.user_id as string | undefined;
 
-  if (!userId || !reference) return;
+  if (!reference) return;
 
+  // Subscription payments — flip the matching subscription row to active.
+  if (purpose === 'subscription') {
+    const { data: sub } = await supabase
+      .from('subscriptions')
+      .select('*')
+      .eq('reference', reference)
+      .single();
+    if (!sub || sub.status === 'active') return;
+
+    const { SUBSCRIPTION_PLANS, planEndDate } = await import('@/lib/subscriptions/plans');
+    const plan = SUBSCRIPTION_PLANS[sub.plan];
+    const startsAt = new Date();
+    const endsAt = planEndDate(sub.plan, startsAt);
+
+    await supabase
+      .from('subscriptions')
+      .update({
+        status: 'active',
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+      })
+      .eq('id', sub.id);
+
+    await supabase.from('notifications').insert({
+      user_id: sub.user_id,
+      title: 'Subscription activated',
+      body: `Your ${plan.label} plan is active until ${endsAt.toLocaleDateString('en-NG')}.`,
+      type: 'subscription',
+    });
+    return;
+  }
+
+  if (!userId) return;
   const amountNGN = amountKobo / 100;
 
-  // Credit wallet via ledger
+  // Credit wallet via ledger for any other purpose.
   await supabase.from('wallet_ledger').upsert(
     {
       user_id: userId,

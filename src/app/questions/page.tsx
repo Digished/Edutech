@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import SearchSelect from '@/components/SearchSelect';
-import { ArrowLeftIcon, BookIcon, InboxIcon, SearchIcon } from '@/components/icons';
+import {
+  InboxIcon, LockIcon, SearchIcon, SparklesIcon,
+} from '@/components/icons';
 
 interface Course {
   id: string;
@@ -52,6 +54,7 @@ export default function QuestionsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [selectedCourse, setSelectedCourse] = useState('');
   const [school, setSchool] = useState('');
+  const [subscriptionRequired, setSubscriptionRequired] = useState(false);
 
   const fetchCourses = useCallback(async () => {
     const params = new URLSearchParams({ limit: '100' });
@@ -63,6 +66,7 @@ export default function QuestionsPage() {
 
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
+    setSubscriptionRequired(false);
     try {
       let url: string;
       const params = new URLSearchParams({ page: String(page), limit: '20' });
@@ -76,6 +80,12 @@ export default function QuestionsPage() {
       }
 
       const res = await fetch(url);
+      if (res.status === 403) {
+        setSubscriptionRequired(true);
+        setQuestions([]);
+        setTotal(0);
+        return;
+      }
       const json = await res.json();
       setQuestions(json.data ?? []);
       setTotal(json.total ?? 0);
@@ -115,7 +125,7 @@ export default function QuestionsPage() {
       {/* Nav */}
       <nav className="bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href={me ? '/dashboard' : '/'} className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
               <span className="text-white font-bold text-xs">E</span>
             </div>
@@ -190,7 +200,23 @@ export default function QuestionsPage() {
         </div>
 
         {/* Questions list */}
-        {loading ? (
+        {subscriptionRequired ? (
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-green-200 dark:border-green-900 p-8 text-center">
+            <span className="inline-flex w-12 h-12 rounded-full bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 items-center justify-center mb-3">
+              <LockIcon size={20} />
+            </span>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Subscribe to unlock the full bank</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
+              From ₦1,500 / month. Pay once and get every approved past question, AI-graded theory practice and more.
+            </p>
+            <Link
+              href="/dashboard/subscription"
+              className="inline-flex items-center gap-2 mt-5 bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm"
+            >
+              <SparklesIcon size={14} /> See plans
+            </Link>
+          </div>
+        ) : loading ? (
           <div className="space-y-3">
             {[...Array(6)].map((_, i) => (
               <div key={i} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5 animate-pulse">

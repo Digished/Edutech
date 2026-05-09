@@ -151,6 +151,37 @@ export interface Notification {
   created_at: string;
 }
 
+export type SubscriptionPlan = 'monthly' | 'quarterly' | 'yearly';
+export type SubscriptionStatusType = 'pending' | 'active' | 'expired' | 'cancelled';
+
+export interface PayoutMethod {
+  id: string;
+  user_id: string;
+  bank_code: string;
+  bank_name: string | null;
+  account_number: string;
+  account_name: string;
+  recipient_code: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Subscription {
+  id: string;
+  user_id: string;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatusType;
+  amount: number;
+  currency: string;
+  reference: string | null;
+  paystack_access_code: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // ============================================================
 // API Request / Response shapes
 // ============================================================

@@ -201,7 +201,7 @@ export default function UploadsPage() {
 <span className="inline-flex items-center gap-1.5"><ArrowLeftIcon size={14} /> Dashboard</span>
           </Link>
           <span className="text-zinc-300 dark:text-zinc-700">|</span>
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-green-600 flex items-center justify-center">
               <span className="text-white font-bold text-xs">E</span>
             </div>

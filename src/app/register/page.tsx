@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import PasswordInput from '@/components/PasswordInput';
 
 interface University { id: string; name: string }
 interface Department { id: string; name: string; university_id: string }
@@ -108,14 +109,13 @@ export default function RegisterPage() {
 
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Password <span className="text-red-500">*</span></label>
-              <input
-                type="password"
+              <PasswordInput
                 required
                 minLength={8}
+                autoComplete="new-password"
                 value={form.password}
                 onChange={(e) => update('password', e.target.value)}
                 placeholder="Min. 8 characters"
-                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
             </div>
 

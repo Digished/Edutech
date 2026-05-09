@@ -29,7 +29,7 @@ export default function RevenueExplainer({ defaultOpen = false }: { defaultOpen?
         <div className="px-5 pb-5 pt-1 text-sm text-zinc-600 dark:text-zinc-300 space-y-4">
           <p>
             Each month we add the platform&apos;s net revenue to a <strong>contributor pool</strong>. The pool is
-            <strong> 70%</strong> of revenue — the remaining 30% covers infrastructure, payments and moderation.
+            <strong> 50%</strong> of revenue — the remaining 50% covers infrastructure, payments and moderation.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

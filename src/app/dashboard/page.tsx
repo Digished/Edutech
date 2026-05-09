@@ -8,10 +8,11 @@ import {
   BookIcon,
   FlaskIcon,
   GraduationIcon,
+  LockIcon,
   LogOutIcon,
   PenIcon,
   PlayIcon,
-  WalletIcon,
+  SparklesIcon,
 } from '@/components/icons';
 
 interface UserProfile {
@@ -20,22 +21,21 @@ interface UserProfile {
   full_name: string | null;
   school: string | null;
   department: string | null;
-  role: string;
+  role: 'student' | 'contributor' | 'admin';
 }
 
-interface WalletData {
-  balance: number;
-  currency: string;
-  ledger: { data: LedgerEntry[]; total: number };
-}
-
-interface LedgerEntry {
-  id: string;
-  amount: number;
-  type: 'credit' | 'debit';
-  status: string;
-  reason: string;
-  created_at: string;
+interface ContributorStatus {
+  role: 'student' | 'contributor' | 'admin';
+  is_contributor: boolean;
+  approved_contributions: number;
+  promotion_threshold: number;
+  progress_to_contributor: number;
+  has_active_subscription: boolean;
+  subscription: {
+    plan: 'monthly' | 'quarterly' | 'yearly';
+    status: string;
+    ends_at: string | null;
+  } | null;
 }
 
 interface PausedSession {
@@ -44,9 +44,15 @@ interface PausedSession {
   startedAt: number;
 }
 
+const PLAN_LABEL: Record<string, string> = {
+  monthly: 'Monthly',
+  quarterly: '3 months',
+  yearly: '12 months',
+};
+
 export default function DashboardPage() {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [wallet, setWallet] = useState<WalletData | null>(null);
+  const [status, setStatus] = useState<ContributorStatus | null>(null);
   const [contributions, setContributions] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -55,9 +61,9 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [meRes, walletRes, contribRes] = await Promise.all([
+        const [meRes, statusRes, contribRes] = await Promise.all([
           fetch('/api/auth/me'),
-          fetch('/api/wallet'),
+          fetch('/api/contributor-status'),
           fetch('/api/contributions?limit=1'),
         ]);
 
@@ -76,9 +82,9 @@ export default function DashboardPage() {
         }
         setUser(meJson.data);
 
-        if (walletRes.ok) {
-          const w = await walletRes.json();
-          setWallet(w.data);
+        if (statusRes.ok) {
+          const j = await statusRes.json();
+          setStatus(j.data);
         }
         if (contribRes.ok) {
           const c = await contribRes.json();
@@ -134,20 +140,31 @@ export default function DashboardPage() {
   if (!user) return null;
 
   const firstName = user.full_name?.split(' ')[0] ?? 'there';
-  const roleLabel = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+  const isContributor = status?.is_contributor ?? false;
+  const hasSub = status?.has_active_subscription ?? false;
+  const promoPct = status
+    ? Math.min(100, Math.round((status.approved_contributions / status.promotion_threshold) * 100))
+    : 0;
+
+  const accessUnlocked = isContributor || hasSub;
 
   const actions = [
-    { label: 'Browse questions', href: '/questions', desc: 'Search the bank', Icon: BookIcon },
+    {
+      label: accessUnlocked ? 'Browse questions' : 'Subscribe to browse',
+      href: accessUnlocked ? '/questions' : '/dashboard/subscription',
+      desc: accessUnlocked ? 'Search the full bank' : 'Unlock the question bank',
+      Icon: BookIcon,
+    },
     { label: 'Practice exam', href: '/dashboard/practice', desc: 'Sit a mock exam', Icon: FlaskIcon },
-    { label: 'Contributions', href: '/dashboard/contributions', desc: 'Submit & track', Icon: PenIcon },
+    { label: 'Contributions', href: '/dashboard/contributions', desc: 'Add questions & manage wallet', Icon: PenIcon },
   ];
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      {/* Nav */}
+      {/* Nav — logo points to /dashboard so logged-in users stay logged in. */}
       <nav className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur border-b border-zinc-100 dark:border-zinc-800 sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center">
               <span className="text-white font-bold text-xs">E</span>
             </div>
@@ -155,10 +172,22 @@ export default function DashboardPage() {
           </Link>
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 font-medium">
+              <span
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium ${
+                  isContributor
+                    ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400'
+                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200'
+                }`}
+              >
                 <GraduationIcon size={12} />
-                {roleLabel}
+                {isContributor ? 'Contributor' : 'Student'}
               </span>
+              {hasSub && !isContributor && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-400 font-medium">
+                  <SparklesIcon size={12} />
+                  Subscribed
+                </span>
+              )}
               <span className="text-zinc-400">{user.email}</span>
             </span>
             <button
@@ -172,7 +201,6 @@ export default function DashboardPage() {
       </nav>
 
       <div className="max-w-6xl mx-auto px-6 py-6">
-        {/* Greeting + meta strip — single compact line, no role repetition */}
         <div className="mb-6">
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white">
             Hello, {firstName}
@@ -203,37 +231,72 @@ export default function DashboardPage() {
           </Link>
         )}
 
-        {/* Compact metric strip — two metrics, no repetition */}
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        {/* Status strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          {/* Subscription / access tile */}
           <Link
-            href="/dashboard/wallet"
+            href={isContributor ? '/dashboard/contributions' : '/dashboard/subscription'}
             className="group bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between hover:border-green-300 transition-colors"
           >
             <div>
-              <div className="text-[11px] uppercase tracking-wide text-zinc-400">Wallet</div>
-              <div className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-white mt-0.5">
-                ₦{(wallet?.balance ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+              <div className="text-[11px] uppercase tracking-wide text-zinc-400">Access</div>
+              <div className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-white mt-0.5">
+                {isContributor
+                  ? 'Contributor — full access'
+                  : hasSub && status?.subscription
+                  ? `${PLAN_LABEL[status.subscription.plan] ?? 'Subscribed'} active`
+                  : 'Locked — subscribe to browse'}
               </div>
+              {status?.subscription?.ends_at && hasSub && (
+                <div className="text-[11px] text-zinc-400 mt-0.5">
+                  Until {new Date(status.subscription.ends_at).toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+              )}
             </div>
-            <span className="w-9 h-9 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center group-hover:bg-green-50 group-hover:text-green-700 dark:group-hover:bg-green-950 dark:group-hover:text-green-400 transition-colors">
-              <WalletIcon size={16} />
+            <span
+              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                accessUnlocked
+                  ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400'
+                  : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:bg-green-50 group-hover:text-green-700'
+              }`}
+            >
+              {accessUnlocked ? <SparklesIcon size={16} /> : <LockIcon size={16} />}
             </span>
           </Link>
+
+          {/* Contributions tile with progress */}
           <Link
             href="/dashboard/contributions"
-            className="group bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between hover:border-green-300 transition-colors"
+            className="group bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 hover:border-green-300 transition-colors"
           >
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-zinc-400">Contributions</div>
-              <div className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-white mt-0.5">{contributions}</div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-zinc-400">Contributions</div>
+                <div className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-white mt-0.5">
+                  {contributions} total
+                </div>
+                {!isContributor && status && (
+                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                    {status.approved_contributions} / {status.promotion_threshold} approved → contributor
+                  </div>
+                )}
+                {isContributor && (
+                  <div className="text-[11px] text-green-600 dark:text-green-400 mt-0.5">Wallet unlocked</div>
+                )}
+              </div>
+              <span className="w-9 h-9 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center group-hover:bg-green-50 group-hover:text-green-700 transition-colors">
+                <PenIcon size={16} />
+              </span>
             </div>
-            <span className="w-9 h-9 rounded-lg bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center group-hover:bg-green-50 group-hover:text-green-700 dark:group-hover:bg-green-950 dark:group-hover:text-green-400 transition-colors">
-              <PenIcon size={16} />
-            </span>
+            {!isContributor && (
+              <div className="mt-3 h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                <div className="h-full bg-green-600 transition-all" style={{ width: `${promoPct}%` }} />
+              </div>
+            )}
           </Link>
         </div>
 
-        {/* Quick actions — denser grid with icons */}
+        {/* Quick actions */}
         <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2">Quick actions</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
           {actions.map(({ label, href, desc, Icon }) => (
@@ -252,31 +315,6 @@ export default function DashboardPage() {
             </Link>
           ))}
         </div>
-
-        {/* Recent transactions */}
-        {wallet && wallet.ledger.data.length > 0 && (
-          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
-            <div className="px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-              <h2 className="font-semibold text-zinc-900 dark:text-white text-sm">Recent transactions</h2>
-              <Link href="/dashboard/wallet" className="text-xs text-green-600 hover:text-green-700 inline-flex items-center gap-1">
-                View all <ArrowRightIcon size={12} />
-              </Link>
-            </div>
-            <div className="divide-y divide-zinc-50 dark:divide-zinc-800">
-              {wallet.ledger.data.slice(0, 5).map((entry) => (
-                <div key={entry.id} className="px-4 py-2.5 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-zinc-900 dark:text-white capitalize">{entry.reason.replace('_', ' ')}</div>
-                    <div className="text-xs text-zinc-400">{new Date(entry.created_at).toLocaleDateString()}</div>
-                  </div>
-                  <div className={`text-sm font-semibold ${entry.type === 'credit' ? 'text-green-600' : 'text-red-500'}`}>
-                    {entry.type === 'credit' ? '+' : '-'}₦{Number(entry.amount).toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

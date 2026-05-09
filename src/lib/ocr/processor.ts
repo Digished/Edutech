@@ -23,20 +23,32 @@ export interface ExtractionResult {
 const EXTRACTION_SYSTEM_PROMPT = `You are an expert at extracting exam questions from Nigerian university past papers.
 
 Two question types may be present and you MUST extract BOTH:
-- "mcq" — multiple-choice questions that present options (A, B, C, D, …). Capture the options.
+- "mcq" — multiple-choice questions that present options (A, B, C, D, …). Capture EVERY option that appears under the question.
 - "theory" — open-ended / essay / explanation / "discuss" / "describe" / "prove" / "calculate" / "show that" / "list and explain" questions that have NO options. Capture the full question prompt including any sub-parts (a), (b), (c).
 
 Return a JSON object of the form:
 { "questions": [ { ... }, { ... } ] }
 
 Each item must have:
-- question_text: string (full question, include sub-parts joined with newlines for theory)
+- question_text: string (full question, include sub-parts joined with newlines for theory). Do NOT include the option list inside question_text — the options must live only in the options field.
 - question_type: "mcq" | "theory"
-- options: object or null — required for mcq (e.g. {"A":"…","B":"…","C":"…","D":"…"}); MUST be null for theory
-- correct_answer: string or null (only if explicitly stated, e.g. "A" or a short answer)
+- options: object or null — REQUIRED for mcq. Capture every printed option, keyed exactly by its label (usually A, B, C, D — sometimes E, or i/ii/iii). The value is the option text only, with the leading label, parentheses or punctuation stripped (e.g. "A. 5kg" -> "5kg"). MUST be null for theory.
+- correct_answer: string or null. Use the EXACT option label (e.g. "A", "B", "C") for MCQs. For theory, a short reference answer if explicitly given.
 - year: number or null (academic year if visible on the paper)
 
-Rules:
+Answer key handling — VERY IMPORTANT:
+- Many Nigerian past papers print an answer key at the end of the paper, often labelled "ANSWERS", "ANSWER KEY", "SOLUTIONS", "MARKING SCHEME" or similar.
+- The key is usually a list pairing question numbers with answer labels, e.g.
+    1. A   2. C   3. B   4. D
+    1) A  2) C  3) B
+    1-A 2-C 3-B
+    Q1: A, Q2: C, Q3: B
+- When you find such a section, MAP each entry to its corresponding question by number (the order matches the questions you have already extracted) and set its correct_answer accordingly.
+- Do not include the answer key as a question. Treat it as metadata used only to fill correct_answer.
+- If both an inline answer (e.g. "Ans: B" next to a question) and an end-of-paper key are present, prefer the inline answer.
+- If the key uses the option text rather than a label (e.g. "1. 25kg"), match it back to the option whose value matches and store that option's label in correct_answer.
+
+Other rules:
 - Do not invent options for theory questions. If there are no lettered options, it is theory.
 - Do not skip theory questions — extract every numbered question, including sub-parts.
 - Preserve mathematical notation as plain text (e.g. x^2, sqrt(x), integral notation).
@@ -52,6 +64,27 @@ function client(): OpenAI {
   });
 }
 
+// Detects whether a chunk of text looks like an answer key listing
+// (e.g. "1. A 2. C 3. B 4. D" or "Q1: A; Q2: C"). Returns a number→label map.
+function parseAnswerKey(text: string): Record<number, string> | null {
+  const cleaned = text.replace(/[\r\n]+/g, ' ').trim();
+  const looksLikeKey =
+    /\b(answers?|answer key|marking scheme|solutions?)\b/i.test(cleaned) ||
+    // Lots of `<num>. <letter>` pairs in a row.
+    (cleaned.match(/\b\d{1,3}[).:\-\s]+[A-E]\b/gi) ?? []).length >= 3;
+  if (!looksLikeKey) return null;
+
+  const map: Record<number, string> = {};
+  const re = /\b(\d{1,3})\s*[).:\-]?\s*([A-E])\b/gi;
+  let m;
+  while ((m = re.exec(cleaned)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (!Number.isFinite(n)) continue;
+    map[n] = m[2].toUpperCase();
+  }
+  return Object.keys(map).length >= 2 ? map : null;
+}
+
 function parseQuestions(content: string | null | undefined, finishReason?: string): ExtractionResult {
   if (!content) {
     const reason = finishReason ? ` (finish_reason=${finishReason})` : '';
@@ -60,7 +93,7 @@ function parseQuestions(content: string | null | undefined, finishReason?: strin
   try {
     const parsed = JSON.parse(content);
     const raw = Array.isArray(parsed) ? parsed : (parsed.questions ?? []);
-    const questions: ExtractedQuestion[] = (raw as Array<Record<string, unknown>>)
+    let questions: ExtractedQuestion[] = (raw as Array<Record<string, unknown>>)
       .map((q) => {
         const text = String(q.question_text ?? '').trim();
         if (!text) return null;
@@ -78,6 +111,41 @@ function parseQuestions(content: string | null | undefined, finishReason?: strin
         };
       })
       .filter((q): q is ExtractedQuestion => q !== null);
+
+    // Defensive sweep: if the model mis-categorised an answer key as a regular
+    // question, lift the keys out and back-fill onto the MCQs in order.
+    const keyMap: Record<number, string> = {};
+    questions = questions.filter((q) => {
+      const map = parseAnswerKey(q.question_text);
+      // A real question has options or is genuinely long-form prose; an answer
+      // key is short and full of letter-number pairs.
+      const looksLikeKeyOnly =
+        map &&
+        !q.options &&
+        q.question_text.length < 600 &&
+        Object.keys(map).length >= 2;
+      if (looksLikeKeyOnly) {
+        Object.assign(keyMap, map);
+        return false;
+      }
+      return true;
+    });
+
+    if (Object.keys(keyMap).length > 0) {
+      let mcqIdx = 0;
+      questions = questions.map((q) => {
+        if (q.question_type !== 'mcq') return q;
+        mcqIdx += 1;
+        if (q.correct_answer) return q;
+        const fromKey = keyMap[mcqIdx];
+        if (!fromKey) return q;
+        // Only accept the key answer if the question actually has that option.
+        if (q.options && q.options[fromKey]) {
+          return { ...q, correct_answer: fromKey };
+        }
+        return q;
+      });
+    }
 
     return { questions, error: null };
   } catch (err) {

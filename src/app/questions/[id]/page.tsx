@@ -20,6 +20,8 @@ interface Attempt {
   answer: string;
   is_correct: boolean | null;
   updated_at: string;
+  ai_score?: number | null;
+  ai_feedback?: string | null;
 }
 
 interface Comment {
@@ -294,6 +296,13 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
 
             {answerError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{answerError}</p>}
 
+            {attempt && question.question_type === 'theory' && attempt.ai_feedback && (
+              <div className="mt-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-300">
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">AI feedback: </span>
+                {attempt.ai_feedback}
+              </div>
+            )}
+
             <div className="mt-3 flex items-center gap-3">
               <button
                 onClick={submitAnswer}
@@ -309,7 +318,20 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
                   </span>
                 </span>
               )}
-              {attempt && question.question_type === 'theory' && (
+              {attempt && question.question_type === 'theory' && typeof attempt.ai_score === 'number' && (
+                <span
+                  className={`text-xs font-semibold inline-flex items-center gap-1 ${
+                    attempt.ai_score >= 0.6
+                      ? 'text-green-700 dark:text-green-400'
+                      : attempt.ai_score >= 0.3
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-red-600 dark:text-red-400'
+                  }`}
+                >
+                  AI score {Math.round(attempt.ai_score * 100)}%
+                </span>
+              )}
+              {attempt && question.question_type === 'theory' && attempt.ai_score == null && (
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">Saved</span>
               )}
             </div>
