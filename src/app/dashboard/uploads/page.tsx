@@ -28,7 +28,11 @@ interface Course {
 }
 
 interface University { id: string; name: string }
-interface Department { id: string; name: string; university_id: string }
+interface Faculty   { id: string; name: string; university_id: string }
+interface Department { id: string; name: string; faculty_id: string }
+
+const LEVELS = [100, 200, 300, 400, 500, 600] as const;
+const SEMESTERS = [1, 2, 3] as const;
 
 export default function UploadsPage() {
   const [uploads, setUploads] = useState<Upload[]>([]);
@@ -43,14 +47,19 @@ export default function UploadsPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedCourse, setSelectedCourse] = useState('');
   const [year, setYear] = useState('');
+  const [level, setLevel] = useState<number | ''>('');
+  const [semester, setSemester] = useState<number | ''>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Inline course creation
   const [showAddCourse, setShowAddCourse] = useState(false);
-  const [courseForm, setCourseForm] = useState({ name: '', code: '', school: '', department: '' });
+  const [courseForm, setCourseForm] = useState({
+    name: '', code: '', school: '', faculty: '', department: '',
+  });
   const [courseLoading, setCourseLoading] = useState(false);
   const [courseError, setCourseError] = useState('');
   const [universities, setUniversities] = useState<University[]>([]);
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
 
   const limit = 20;
@@ -115,13 +124,24 @@ export default function UploadsPage() {
     });
   }, []);
 
+  // Cascade: school -> faculties; faculty -> departments.
   useEffect(() => {
-    if (!courseForm.school) { setDepartments([]); return; }
-    fetch(`/api/departments?university=${encodeURIComponent(courseForm.school)}`).then(async (r) => {
+    if (!courseForm.school) { setFaculties([]); return; }
+    fetch(`/api/faculties?university=${encodeURIComponent(courseForm.school)}`).then(async (r) => {
+      const j = await r.json();
+      setFaculties(j.data ?? []);
+    });
+  }, [courseForm.school]);
+
+  useEffect(() => {
+    if (!courseForm.faculty) { setDepartments([]); return; }
+    const facultyRow = faculties.find((f) => f.name === courseForm.faculty);
+    if (!facultyRow) { setDepartments([]); return; }
+    fetch(`/api/departments?faculty_id=${facultyRow.id}`).then(async (r) => {
       const j = await r.json();
       setDepartments(j.data ?? []);
     });
-  }, [courseForm.school]);
+  }, [courseForm.faculty, faculties]);
 
   async function handleAddCourse(e: React.FormEvent) {
     e.preventDefault();
@@ -141,7 +161,7 @@ export default function UploadsPage() {
       const newCourse = json.data as Course;
       setCourses((prev) => [...prev, newCourse]);
       setSelectedCourse(newCourse.id);
-      setCourseForm({ name: '', code: '', school: '', department: '' });
+      setCourseForm({ name: '', code: '', school: '', faculty: '', department: '' });
       setShowAddCourse(false);
     } finally {
       setCourseLoading(false);
@@ -152,6 +172,8 @@ export default function UploadsPage() {
     e.preventDefault();
     if (!selectedFile) return;
     if (!selectedCourse) { setUploadError('Please select a course before uploading.'); return; }
+    if (!level) { setUploadError('Pick a level (100-600).'); return; }
+    if (!semester) { setUploadError('Pick a semester (1, 2 or 3).'); return; }
     setUploadError('');
     setUploadSuccess('');
     setUploading(true);
@@ -159,6 +181,8 @@ export default function UploadsPage() {
       const fd = new FormData();
       fd.append('file', selectedFile);
       fd.append('course_id', selectedCourse);
+      fd.append('level', String(level));
+      fd.append('semester', String(semester));
       if (year) fd.append('year', year);
 
       const res = await fetch('/api/uploads', { method: 'POST', body: fd });
@@ -177,6 +201,8 @@ export default function UploadsPage() {
       setSelectedFile(null);
       setSelectedCourse('');
       setYear('');
+      setLevel('');
+      setSemester('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       loadUploads(1);
       setPage(1);
@@ -293,46 +319,35 @@ export default function UploadsPage() {
                       placeholder="Course code (e.g. CSC301)"
                       className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     />
-                    {universities.length > 0 ? (
-                      <select
-                        required={showAddCourse}
-                        value={courseForm.school}
-                        onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value, department: '' }))}
-                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="">University *</option>
-                        {universities.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        required={showAddCourse}
-                        value={courseForm.school}
-                        onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value }))}
-                        placeholder="University *"
-                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                    )}
-                    {departments.length > 0 ? (
-                      <select
-                        required={showAddCourse}
-                        value={courseForm.department}
-                        onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
-                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      >
-                        <option value="">Department *</option>
-                        {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        required={showAddCourse}
-                        value={courseForm.department}
-                        onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
-                        placeholder="Department *"
-                        className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                    )}
+                    <select
+                      required={showAddCourse}
+                      value={courseForm.school}
+                      onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value, faculty: '', department: '' }))}
+                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="">University *</option>
+                      {universities.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                    </select>
+                    <select
+                      required={showAddCourse}
+                      value={courseForm.faculty}
+                      onChange={(e) => setCourseForm((f) => ({ ...f, faculty: e.target.value, department: '' }))}
+                      disabled={!courseForm.school}
+                      className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-60"
+                    >
+                      <option value="">Faculty *</option>
+                      {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+                    </select>
+                    <select
+                      required={showAddCourse}
+                      value={courseForm.department}
+                      onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
+                      disabled={!courseForm.faculty}
+                      className="sm:col-span-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-60"
+                    >
+                      <option value="">Department *</option>
+                      {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </select>
                   </div>
                   <button
                     type="button"
@@ -346,17 +361,47 @@ export default function UploadsPage() {
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Year</label>
-              <input
-                type="number"
-                min={1990}
-                max={new Date().getFullYear()}
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                placeholder={`e.g. ${new Date().getFullYear() - 1}`}
-                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Level <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={level}
+                  onChange={(e) => setLevel(e.target.value ? parseInt(e.target.value) : '')}
+                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Select level…</option>
+                  {LEVELS.map((l) => <option key={l} value={l}>{l} level</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Semester <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={semester}
+                  onChange={(e) => setSemester(e.target.value ? parseInt(e.target.value) : '')}
+                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                >
+                  <option value="">Select…</option>
+                  {SEMESTERS.map((s) => <option key={s} value={s}>Semester {s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Year</label>
+                <input
+                  type="number"
+                  min={1990}
+                  max={new Date().getFullYear()}
+                  value={year}
+                  onChange={(e) => setYear(e.target.value)}
+                  placeholder={`e.g. ${new Date().getFullYear() - 1}`}
+                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
             </div>
 
             <button
