@@ -70,7 +70,7 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
-      departments: {
+      faculties: {
         Row: {
           id: string;
           university_id: string;
@@ -92,10 +92,36 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
+      departments: {
+        Row: {
+          id: string;
+          faculty_id: string;
+          name: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          faculty_id: string;
+          name: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          faculty_id?: string;
+          name?: string;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
       courses: {
         Row: {
           id: string;
+          university_id: string;
+          faculty_id: string;
+          department_id: string;
           school: string;
+          faculty: string;
           department: string;
           name: string;
           code: string | null;
@@ -105,7 +131,11 @@ export interface Database {
         };
         Insert: {
           id?: string;
+          university_id: string;
+          faculty_id: string;
+          department_id: string;
           school: string;
+          faculty: string;
           department: string;
           name: string;
           code?: string | null;
@@ -114,7 +144,11 @@ export interface Database {
           updated_at?: string;
         };
         Update: {
+          university_id?: string;
+          faculty_id?: string;
+          department_id?: string;
           school?: string;
+          faculty?: string;
           department?: string;
           name?: string;
           code?: string | null;
@@ -130,6 +164,8 @@ export interface Database {
           options: Json | null;
           correct_answer: string | null;
           year: number | null;
+          level: number | null;
+          semester: number | null;
           question_type: 'mcq' | 'theory';
           source_type: 'uploaded' | 'manual' | 'extracted';
           status: 'pending' | 'approved' | 'rejected';
@@ -148,6 +184,8 @@ export interface Database {
           options?: Json | null;
           correct_answer?: string | null;
           year?: number | null;
+          level?: number | null;
+          semester?: number | null;
           question_type?: 'mcq' | 'theory';
           source_type?: 'uploaded' | 'manual' | 'extracted';
           status?: 'pending' | 'approved' | 'rejected';
@@ -165,6 +203,8 @@ export interface Database {
           options?: Json | null;
           correct_answer?: string | null;
           year?: number | null;
+          level?: number | null;
+          semester?: number | null;
           question_type?: 'mcq' | 'theory';
           source_type?: 'uploaded' | 'manual' | 'extracted';
           status?: 'pending' | 'approved' | 'rejected';
@@ -184,6 +224,8 @@ export interface Database {
           course_id: string | null;
           question_type: string | null;
           reveal_mode: string | null;
+          level: number | null;
+          semester: number | null;
           total_questions: number;
           graded_count: number;
           correct_count: number;
@@ -198,6 +240,8 @@ export interface Database {
           course_id?: string | null;
           question_type?: string | null;
           reveal_mode?: string | null;
+          level?: number | null;
+          semester?: number | null;
           total_questions: number;
           graded_count?: number;
           correct_count?: number;
@@ -207,6 +251,8 @@ export interface Database {
           created_at?: string;
         };
         Update: {
+          level?: number | null;
+          semester?: number | null;
           total_questions?: number;
           graded_count?: number;
           correct_count?: number;
@@ -246,6 +292,8 @@ export interface Database {
           id: string;
           user_id: string;
           course_id: string;
+          level: number | null;
+          semester: number | null;
           file_url: string;
           file_type: 'pdf' | 'image';
           original_name: string | null;
@@ -263,6 +311,8 @@ export interface Database {
           id?: string;
           user_id: string;
           course_id: string;
+          level?: number | null;
+          semester?: number | null;
           file_url: string;
           file_type: 'pdf' | 'image';
           original_name?: string | null;
@@ -277,6 +327,8 @@ export interface Database {
           updated_at?: string;
         };
         Update: {
+          level?: number | null;
+          semester?: number | null;
           processed?: boolean;
           processing_error?: string | null;
           questions_extracted?: number;
@@ -672,7 +724,11 @@ export interface Database {
           paystack_access_code: string | null;
           starts_at: string | null;
           ends_at: string | null;
+          university_id: string | null;
+          faculty_id: string | null;
+          department_id: string | null;
           school: string | null;
+          faculty: string | null;
           department: string | null;
           contributor_discount_applied: boolean;
           created_at: string;
@@ -689,7 +745,11 @@ export interface Database {
           paystack_access_code?: string | null;
           starts_at?: string | null;
           ends_at?: string | null;
+          university_id?: string | null;
+          faculty_id?: string | null;
+          department_id?: string | null;
           school?: string | null;
+          faculty?: string | null;
           department?: string | null;
           contributor_discount_applied?: boolean;
           created_at?: string;
@@ -701,10 +761,32 @@ export interface Database {
           paystack_access_code?: string | null;
           starts_at?: string | null;
           ends_at?: string | null;
+          university_id?: string | null;
+          faculty_id?: string | null;
+          department_id?: string | null;
           school?: string | null;
+          faculty?: string | null;
           department?: string | null;
           contributor_discount_applied?: boolean;
           updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      high_yield_tags: {
+        Row: {
+          id: string;
+          question_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          question_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          created_at?: string;
         };
         Relationships: EmptyRelationships;
       };
@@ -726,7 +808,11 @@ export interface Database {
         Args: { p_user_id: string };
         Returns: {
           id: string;
+          university_id: string | null;
+          faculty_id: string | null;
+          department_id: string | null;
           school: string;
+          faculty: string | null;
           department: string;
           plan: 'monthly' | 'quarterly' | 'yearly';
           starts_at: string | null;
@@ -736,6 +822,10 @@ export interface Database {
       contributor_question_count: {
         Args: { p_user_id: string };
         Returns: number;
+      };
+      can_high_yield_tag: {
+        Args: { p_user_id: string; p_question_id: string };
+        Returns: boolean;
       };
     };
     Enums: Record<string, never>;

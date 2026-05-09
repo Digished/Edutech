@@ -110,6 +110,10 @@ export async function POST(req: NextRequest) {
       return badRequest('Provide department_id, or school + faculty + department');
     }
 
+    if (!university_id || !faculty_id || !department_id || !school || !faculty || !department) {
+      return badRequest('Could not resolve full course taxonomy');
+    }
+
     const supabase = await createClient();
     const { data, error: dbError } = await supabase
       .from('courses')
