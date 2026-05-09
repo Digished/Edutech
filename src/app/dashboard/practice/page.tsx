@@ -114,14 +114,22 @@ export default function PracticeSetupPage() {
       </nav>
 
       <div className="max-w-2xl mx-auto px-6 py-8">
-        <div className="flex items-center gap-3 mb-6">
-          <span className="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 flex items-center justify-center">
-            <FlaskIcon size={18} />
-          </span>
-          <div>
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Practice exam</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">One question per page · pause anytime</p>
+        <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 flex items-center justify-center">
+              <FlaskIcon size={18} />
+            </span>
+            <div>
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Practice exam</h1>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">One question per page · pause anytime</p>
+            </div>
           </div>
+          <Link
+            href="/dashboard/practice/history"
+            className="text-xs px-3 py-1.5 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-lg inline-flex items-center gap-1.5"
+          >
+            <ArrowRightIcon size={12} /> View past exams
+          </Link>
         </div>
 
         {paused && (

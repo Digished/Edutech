@@ -136,6 +136,8 @@ export interface Database {
           is_deleted: boolean;
           content_hash: string | null;
           image_urls: Json | null;
+          explanation: string | null;
+          explanation_generated_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -152,6 +154,8 @@ export interface Database {
           is_deleted?: boolean;
           content_hash?: string | null;
           image_urls?: Json | null;
+          explanation?: string | null;
+          explanation_generated_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -167,7 +171,48 @@ export interface Database {
           is_deleted?: boolean;
           content_hash?: string | null;
           image_urls?: Json | null;
+          explanation?: string | null;
+          explanation_generated_at?: string | null;
           updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      practice_sessions: {
+        Row: {
+          id: string;
+          user_id: string;
+          course_id: string | null;
+          question_type: string | null;
+          reveal_mode: string | null;
+          total_questions: number;
+          graded_count: number;
+          correct_count: number;
+          total_score: number | null;
+          duration_ms: number | null;
+          details: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          course_id?: string | null;
+          question_type?: string | null;
+          reveal_mode?: string | null;
+          total_questions: number;
+          graded_count?: number;
+          correct_count?: number;
+          total_score?: number | null;
+          duration_ms?: number | null;
+          details: Json;
+          created_at?: string;
+        };
+        Update: {
+          total_questions?: number;
+          graded_count?: number;
+          correct_count?: number;
+          total_score?: number | null;
+          duration_ms?: number | null;
+          details?: Json;
         };
         Relationships: EmptyRelationships;
       };

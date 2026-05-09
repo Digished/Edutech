@@ -230,6 +230,28 @@ function PracticeRunInner() {
       const correct = details.filter((d) => d.correct === true).length;
       setFinished({ correct, total: s.ids.length, details });
       sessionStorage.removeItem('practice_session');
+      // Persist the run so the user can review it later.
+      try {
+        await fetch('/api/practice-sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            course_id: s.courseId,
+            reveal_mode: s.reveal,
+            total_questions: s.ids.length,
+            duration_ms: Date.now() - (s.startedAt ?? Date.now()),
+            details: details.map((d) => ({
+              question_id: d.id,
+              question_type: d.type,
+              given: d.given ?? '',
+              expected: d.expected ?? null,
+              correct: d.correct,
+              score: d.score,
+              feedback: d.feedback ?? null,
+            })),
+          }),
+        });
+      } catch { /* swallow — review still available locally */ }
     } finally {
       setSubmitting(false);
     }

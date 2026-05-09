@@ -72,7 +72,14 @@ export async function GET(req: NextRequest) {
       .range(from, to);
 
     if (error) return serverError(error.message);
-    return paginated(data ?? [], count ?? 0, page, limit);
+    // Strip correct_answer from the listing response so the right answer can't
+    // be peeked from the network tab — the per-question GET reveals it.
+    const sanitized = (data ?? []).map((row) => {
+      const { correct_answer: _omit, ...rest } = row as Record<string, unknown>;
+      void _omit;
+      return rest;
+    });
+    return paginated(sanitized, count ?? 0, page, limit);
   } catch {
     return serverError();
   }

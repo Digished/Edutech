@@ -69,20 +69,29 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
   const [flagDone, setFlagDone] = useState(false);
   const [flagError, setFlagError] = useState('');
 
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [explanationError, setExplanationError] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const meRes = await fetch('/api/auth/me');
       if (meRes.status === 401) { window.location.href = `/login?next=/questions/${id}`; return; }
 
-      const [qRes, aRes, cRes] = await Promise.all([
+      const [qRes, aRes, cRes, eRes] = await Promise.all([
         fetch(`/api/questions/${id}`),
         fetch(`/api/questions/${id}/attempt`),
         fetch(`/api/questions/${id}/comments?limit=100`),
+        fetch(`/api/questions/${id}/explain`),
       ]);
       const qJson = await qRes.json();
       const aJson = await aRes.json();
       const cJson = await cRes.json();
+      if (eRes.ok) {
+        const eJson = await eRes.json();
+        if (eJson.data?.explanation) setExplanation(eJson.data.explanation as string);
+      }
       setQuestion(qJson.data ?? null);
       const a: Attempt | null = aJson.data ?? null;
       setAttempt(a);
@@ -114,6 +123,25 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
       setAttempt(json.data);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function loadExplanation() {
+    if (explanationLoading) return;
+    setExplanationLoading(true);
+    setExplanationError('');
+    try {
+      const res = await fetch(`/api/questions/${id}/explain`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) {
+        setExplanationError(json.error ?? 'Could not load the explanation');
+        return;
+      }
+      setExplanation(json.data?.explanation ?? null);
+    } catch {
+      setExplanationError('Network error');
+    } finally {
+      setExplanationLoading(false);
     }
   }
 
@@ -316,7 +344,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
 
             {attempt && question.question_type === 'theory' && attempt.ai_feedback && (
               <div className="mt-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-300">
-                <span className="font-semibold text-zinc-700 dark:text-zinc-200">AI feedback: </span>
+                <span className="font-semibold text-zinc-700 dark:text-zinc-200">Feedback: </span>
                 {attempt.ai_feedback}
               </div>
             )}
@@ -346,7 +374,7 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
                       : 'text-red-600 dark:text-red-400'
                   }`}
                 >
-                  AI score {Math.round(attempt.ai_score * 100)}%
+                  Score {Math.round(attempt.ai_score * 100)}%
                 </span>
               )}
               {attempt && question.question_type === 'theory' && attempt.ai_score == null && (
@@ -354,6 +382,20 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
               )}
             </div>
           </div>
+
+          {/* Explanation panel — appears once the user has submitted an answer
+              so the explanation never spoils the question. */}
+          {attempt && (
+            <div className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-800">
+              <ExplanationPanel
+                explanation={explanation}
+                loading={explanationLoading}
+                error={explanationError}
+                onLoad={loadExplanation}
+                onClose={() => { /* keep visible */ }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Comments */}
@@ -498,6 +540,53 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ExplanationPanel({
+  explanation,
+  loading,
+  error,
+  onLoad,
+}: {
+  explanation: string | null;
+  loading: boolean;
+  error: string;
+  onLoad: () => void;
+  onClose: () => void;
+}) {
+  if (!explanation) {
+    return (
+      <div>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Stuck on the answer?</h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+              Get a step-by-step walkthrough in plain English.
+            </p>
+          </div>
+          <button
+            onClick={onLoad}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-800 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40 disabled:opacity-60"
+          >
+            {loading ? 'Preparing the explanation…' : 'Explain the answer'}
+          </button>
+        </div>
+        {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Explanation</h3>
+      </div>
+      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-line">
+        {explanation}
+      </div>
     </div>
   );
 }

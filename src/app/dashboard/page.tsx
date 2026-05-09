@@ -6,6 +6,7 @@ import {
   AlertTriangleIcon,
   ArrowRightIcon,
   BookIcon,
+  ClockIcon,
   FlaskIcon,
   GraduationIcon,
   LockIcon,
@@ -156,6 +157,7 @@ export default function DashboardPage() {
       Icon: BookIcon,
     },
     { label: 'Practice exam', href: '/dashboard/practice', desc: 'Sit a mock exam', Icon: FlaskIcon },
+    { label: 'Practice history', href: '/dashboard/practice/history', desc: 'Review past exams', Icon: ClockIcon },
     { label: 'Contributions', href: '/dashboard/contributions', desc: 'Add questions & manage wallet', Icon: PenIcon },
   ];
 

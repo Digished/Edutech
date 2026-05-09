@@ -106,6 +106,60 @@ Scoring rubric:
 Be strict but fair. Reward correct reasoning even when wording differs.
 Return ONLY the JSON object — no markdown, no preamble.`;
 
+export interface ExplanationResult {
+  explanation: string;
+}
+
+const EXPLANATION_PROMPT = `You are a patient university tutor. A student is studying for an exam and has just been told the correct answer to a past question. Explain WHY that answer is correct.
+
+Write the explanation as if you are speaking directly to the student. Use plain, everyday English — short sentences, no jargon unless you immediately define it. Walk through the reasoning step by step. Show any small calculation in full so the student can follow.
+
+Structure (use these exact headings, no other formatting tricks):
+
+Quick answer: <one short line stating the correct answer in words>
+Why: <2-4 short paragraphs walking the student through the reasoning>
+Common mistake: <one or two sentences on the most likely wrong choice and why it tempts students. Skip this section for theory questions.>
+
+Rules:
+- Be ACCURATE. If the question is genuinely ambiguous or the marked answer looks wrong, say so plainly.
+- Never refer to yourself, "AI", "the model", "as a language model", etc. Speak as a tutor.
+- Don't start with "Sure" / "Of course" / "Great question" — get straight to the explanation.
+- Don't restate the question verbatim.
+- Use simple analogies where they help. Keep total length under ~250 words unless the question really needs more.`;
+
+export async function generateExplanation(
+  questionText: string,
+  questionType: QuestionType,
+  options: QuestionOptions | null,
+  correctAnswer: string | null,
+): Promise<ExplanationResult> {
+  const optionsBlock =
+    questionType === 'mcq' && options
+      ? `\n\nOptions:\n${Object.entries(options)
+          .map(([k, v]) => `${k}. ${v}`)
+          .join('\n')}`
+      : '';
+  const answerBlock = correctAnswer
+    ? `\n\nMarked correct answer: ${correctAnswer}`
+    : '\n\nNo official answer was recorded — work out the most defensible answer first, then explain it.';
+
+  const userMessage = `Question (${questionType.toUpperCase()}):\n${questionText}${optionsBlock}${answerBlock}`;
+
+  const openai = client();
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: EXPLANATION_PROMPT },
+      { role: 'user', content: userMessage },
+    ],
+    temperature: 0.2,
+    max_tokens: 700,
+  });
+
+  const content = response.choices[0]?.message?.content?.trim() ?? '';
+  return { explanation: content };
+}
+
 export async function gradeTheoryAnswer(
   questionText: string,
   studentAnswer: string,

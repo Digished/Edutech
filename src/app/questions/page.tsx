@@ -266,11 +266,7 @@ export default function QuestionsPage() {
                     {Object.entries(q.options).map(([key, val]) => (
                       <div
                         key={key}
-                        className={`text-xs px-3 py-1.5 rounded-lg border ${
-                          q.correct_answer === key
-                            ? 'border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400'
-                            : 'border-zinc-100 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400'
-                        }`}
+                        className="text-xs px-3 py-1.5 rounded-lg border border-zinc-100 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-400"
                       >
                         <span className="font-semibold">{key}.</span> {val}
                       </div>
