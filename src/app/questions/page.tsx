@@ -43,11 +43,16 @@ interface Me {
   role: 'student' | 'contributor' | 'admin';
 }
 
+interface UnlockedDept { id: string; school: string; department: string }
+
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [universities, setUniversities] = useState<University[]>([]);
   const [me, setMe] = useState<Me | null>(null);
+  const [unlocked, setUnlocked] = useState<UnlockedDept[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [statusLoaded, setStatusLoaded] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -110,6 +115,14 @@ export default function QuestionsPage() {
         const j = await r.json();
         setMe(j.data ?? null);
       }
+    });
+    fetch('/api/contributor-status').then(async (r) => {
+      if (r.ok) {
+        const j = await r.json();
+        setUnlocked(j.data?.unlocked_departments ?? []);
+        setIsAdmin(!!j.data?.is_admin);
+      }
+      setStatusLoaded(true);
     });
   }, []);
 
@@ -200,21 +213,37 @@ export default function QuestionsPage() {
           </div>
         </div>
 
-        {/* Questions list */}
-        {subscriptionRequired ? (
+        {/* No unlocks at all */}
+        {statusLoaded && !isAdmin && unlocked.length === 0 ? (
           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-green-200 dark:border-green-900 p-8 text-center">
             <span className="inline-flex w-12 h-12 rounded-full bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 items-center justify-center mb-3">
               <LockIcon size={20} />
             </span>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Subscribe to unlock the full bank</h2>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">Unlock a department to start browsing</h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
-              From ₦1,500 / month. Pay once and get every approved past question, AI-graded theory practice and more.
+              Subscriptions are per university and department. Pick the ones you need — you can bundle multiple in a single payment.
             </p>
             <Link
               href="/dashboard/subscription"
               className="inline-flex items-center gap-2 mt-5 bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm"
             >
-              <SparklesIcon size={14} /> See plans
+              <SparklesIcon size={14} /> See subscriptions
+            </Link>
+          </div>
+        ) : subscriptionRequired ? (
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-green-200 dark:border-green-900 p-8 text-center">
+            <span className="inline-flex w-12 h-12 rounded-full bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 items-center justify-center mb-3">
+              <LockIcon size={20} />
+            </span>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">This department isn&apos;t unlocked yet</h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
+              Add it to your subscriptions to view and practice questions here.
+            </p>
+            <Link
+              href="/dashboard/subscription"
+              className="inline-flex items-center gap-2 mt-5 bg-green-600 hover:bg-green-700 text-white font-medium px-5 py-2.5 rounded-lg text-sm"
+            >
+              <SparklesIcon size={14} /> Manage subscriptions
             </Link>
           </div>
         ) : loading ? (

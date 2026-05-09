@@ -1,41 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import PasswordInput from '@/components/PasswordInput';
-
-interface University { id: string; name: string }
-interface Department { id: string; name: string; university_id: string }
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
     email: '',
     password: '',
     full_name: '',
-    school: '',
-    department: '',
   });
-  const [universities, setUniversities] = useState<University[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/universities').then(async (r) => {
-      const j = await r.json();
-      setUniversities(j.data ?? []);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!form.school) { setDepartments([]); return; }
-    fetch(`/api/departments?university=${encodeURIComponent(form.school)}`).then(async (r) => {
-      const j = await r.json();
-      setDepartments(j.data ?? []);
-    });
-  }, [form.school]);
-
-  function update(field: string, value: string) {
+  function update(field: 'email' | 'password' | 'full_name', value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
@@ -73,7 +51,9 @@ export default function RegisterPage() {
             <span className="font-semibold text-zinc-900 dark:text-white text-lg">EduTech</span>
           </Link>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Create your account</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Start accessing and contributing questions</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+            You&apos;ll choose which departments to unlock from your dashboard.
+          </p>
         </div>
 
         <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
@@ -100,6 +80,7 @@ export default function RegisterPage() {
               <input
                 type="email"
                 required
+                autoComplete="email"
                 value={form.email}
                 onChange={(e) => update('email', e.target.value)}
                 placeholder="you@example.com"
@@ -117,50 +98,6 @@ export default function RegisterPage() {
                 onChange={(e) => update('password', e.target.value)}
                 placeholder="Min. 8 characters"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">University</label>
-              {universities.length > 0 ? (
-                <select
-                  value={form.school}
-                  onChange={(e) => { update('school', e.target.value); update('department', ''); }}
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="">Select your university…</option>
-                  {universities.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={form.school}
-                  onChange={(e) => update('school', e.target.value)}
-                  placeholder="e.g. University of Lagos"
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Department</label>
-              {departments.length > 0 ? (
-                <select
-                  value={form.department}
-                  onChange={(e) => update('department', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="">Select your department…</option>
-                  {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={form.department}
-                  onChange={(e) => update('department', e.target.value)}
-                  placeholder="e.g. Computer Science"
-                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              )}
             </div>
 
             <button

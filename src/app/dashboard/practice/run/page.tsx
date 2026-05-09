@@ -60,6 +60,10 @@ function PracticeRunInner() {
   const [committed, setCommitted] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  // Per-question explanation cache, keyed by question id.
+  const [explanationByQid, setExplanationByQid] = useState<Record<string, string>>({});
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [explanationError, setExplanationError] = useState('');
   const [finished, setFinished] = useState<{
     correct: number;
     total: number;
@@ -97,16 +101,48 @@ function PracticeRunInner() {
 
   const loadQuestion = useCallback(async (qid: string, prefill: string) => {
     setLoading(true);
+    setExplanationError('');
     try {
-      const res = await fetch(`/api/questions/${qid}`);
-      const json = await res.json();
-      setQuestion(json.data ?? null);
+      const [qRes, eRes] = await Promise.all([
+        fetch(`/api/questions/${qid}`),
+        fetch(`/api/questions/${qid}/explain`),
+      ]);
+      const qJson = await qRes.json();
+      setQuestion(qJson.data ?? null);
       setAnswer(prefill);
       setCommitted(prefill);
+      if (eRes.ok) {
+        const eJson = await eRes.json();
+        const cached = eJson?.data?.explanation;
+        if (cached) {
+          setExplanationByQid((m) => ({ ...m, [qid]: cached }));
+        }
+      }
     } finally {
       setLoading(false);
     }
   }, []);
+
+  async function loadExplanation() {
+    if (!currentId) return;
+    if (explanationLoading) return;
+    setExplanationError('');
+    setExplanationLoading(true);
+    try {
+      const res = await fetch(`/api/questions/${currentId}/explain`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) {
+        setExplanationError(json.error ?? 'Could not load the explanation');
+        return;
+      }
+      const text: string = json.data?.explanation ?? '';
+      if (text) setExplanationByQid((m) => ({ ...m, [currentId]: text }));
+    } catch {
+      setExplanationError('Network error');
+    } finally {
+      setExplanationLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!currentId || !sessionRef.current) return;
@@ -486,6 +522,39 @@ function PracticeRunInner() {
                   {isCorrect
                     ? 'Correct!'
                     : `Not quite. The correct answer is ${question.correct_answer}.`}
+                </div>
+              )}
+
+              {/* Explanation — shows once the user has chosen / written something. */}
+              {currentId && (committed || answer.trim()) && (
+                <div className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-800">
+                  {explanationByQid[currentId] ? (
+                    <div>
+                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-white mb-2">Explanation</h3>
+                      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-800 px-4 py-3 text-sm text-zinc-700 dark:text-zinc-200 leading-relaxed whitespace-pre-line">
+                        {explanationByQid[currentId]}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div>
+                        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Stuck on the answer?</h3>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                          Get a step-by-step walkthrough in plain English.
+                        </p>
+                      </div>
+                      <button
+                        onClick={loadExplanation}
+                        disabled={explanationLoading}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-green-300 dark:border-green-800 text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40 disabled:opacity-60"
+                      >
+                        {explanationLoading ? 'Preparing the explanation…' : 'Explain the answer'}
+                      </button>
+                    </div>
+                  )}
+                  {explanationError && (
+                    <p className="mt-2 text-xs text-red-600 dark:text-red-400">{explanationError}</p>
+                  )}
                 </div>
               )}
             </>

@@ -179,8 +179,20 @@ export interface Subscription {
   paystack_access_code: string | null;
   starts_at: string | null;
   ends_at: string | null;
+  school: string | null;
+  department: string | null;
+  contributor_discount_applied: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface UnlockedDepartment {
+  id: string;
+  school: string;
+  department: string;
+  plan: SubscriptionPlan;
+  starts_at: string | null;
+  ends_at: string | null;
 }
 
 // ============================================================

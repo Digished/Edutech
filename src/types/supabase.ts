@@ -672,6 +672,9 @@ export interface Database {
           paystack_access_code: string | null;
           starts_at: string | null;
           ends_at: string | null;
+          school: string | null;
+          department: string | null;
+          contributor_discount_applied: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -686,6 +689,9 @@ export interface Database {
           paystack_access_code?: string | null;
           starts_at?: string | null;
           ends_at?: string | null;
+          school?: string | null;
+          department?: string | null;
+          contributor_discount_applied?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -695,6 +701,9 @@ export interface Database {
           paystack_access_code?: string | null;
           starts_at?: string | null;
           ends_at?: string | null;
+          school?: string | null;
+          department?: string | null;
+          contributor_discount_applied?: boolean;
           updated_at?: string;
         };
         Relationships: EmptyRelationships;
@@ -709,16 +718,17 @@ export interface Database {
         Args: { p_question_id: string };
         Returns: undefined;
       };
-      has_active_subscription: {
-        Args: { p_user_id: string };
+      has_active_subscription_for: {
+        Args: { p_user_id: string; p_school: string; p_department: string };
         Returns: boolean;
       };
-      get_active_subscription: {
+      list_unlocked_departments: {
         Args: { p_user_id: string };
         Returns: {
           id: string;
+          school: string;
+          department: string;
           plan: 'monthly' | 'quarterly' | 'yearly';
-          status: 'pending' | 'active' | 'expired' | 'cancelled';
           starts_at: string | null;
           ends_at: string | null;
         }[];

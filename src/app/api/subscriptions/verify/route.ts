@@ -12,7 +12,7 @@ const schema = z.object({
 
 // POST /api/subscriptions/verify — confirm a Paystack payment after the user
 // returns from the hosted checkout. Idempotent: re-verifying an already-active
-// subscription is a no-op that returns the current state.
+// bundle is a no-op.
 export async function POST(req: NextRequest) {
   try {
     const { authUser, error } = await getAuthUser();
@@ -23,17 +23,15 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
     const admin = createAdminClient();
-    const { data: sub } = await admin
+    const { data: rows } = await admin
       .from('subscriptions')
       .select('*')
       .eq('reference', parsed.data.reference)
-      .eq('user_id', authUser.id)
-      .single();
-    if (!sub) return notFound('Subscription not found');
+      .eq('user_id', authUser.id);
+    if (!rows || rows.length === 0) return notFound('Subscription not found');
 
-    if (sub.status === 'active') {
-      return ok(sub, 'Already active');
-    }
+    const allActive = rows.every((r) => r.status === 'active');
+    if (allActive) return ok({ rows, already_active: true }, 'Already active');
 
     let txn;
     try {
@@ -44,18 +42,24 @@ export async function POST(req: NextRequest) {
     }
 
     if (txn.status !== 'success') {
-      await admin.from('subscriptions').update({ status: 'cancelled' }).eq('id', sub.id);
+      await admin
+        .from('subscriptions')
+        .update({ status: 'cancelled' })
+        .eq('reference', parsed.data.reference);
       return badRequest(`Payment ${txn.status}. Try again.`);
     }
 
-    const plan = SUBSCRIPTION_PLANS[sub.plan];
-    const expectedKobo = Math.round(plan.amount * 100);
-    if (txn.amount < expectedKobo) {
-      return badRequest('Amount mismatch with selected plan');
+    // Sanity check on the amount: the sum of paid_share across rows must match
+    // what Paystack actually collected (kobo).
+    const expectedKobo = Math.round(rows.reduce((s, r) => s + Number(r.amount), 0) * 100);
+    if (txn.amount + 100 < expectedKobo) {
+      // Allow ~₦1 tolerance for rounding.
+      return badRequest('Amount mismatch with bundle');
     }
 
     const startsAt = new Date();
-    const endsAt = planEndDate(sub.plan, startsAt);
+    const plan = rows[0].plan;
+    const endsAt = planEndDate(plan, startsAt);
 
     const { data: updated, error: updErr } = await admin
       .from('subscriptions')
@@ -64,19 +68,20 @@ export async function POST(req: NextRequest) {
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
       })
-      .eq('id', sub.id)
-      .select()
-      .single();
+      .eq('reference', parsed.data.reference)
+      .select();
     if (updErr) return serverError(updErr.message);
 
+    const planLabel = SUBSCRIPTION_PLANS[plan].label;
+    const departmentList = rows.map((r) => `${r.department} (${r.school})`).join(', ');
     await admin.from('notifications').insert({
       user_id: authUser.id,
       title: 'Subscription activated',
-      body: `Your ${plan.label} plan is active until ${endsAt.toLocaleDateString('en-NG')}.`,
+      body: `Your ${planLabel} plan is active for: ${departmentList}. Expires ${endsAt.toLocaleDateString('en-NG')}.`,
       type: 'subscription',
     });
 
-    return ok(updated, 'Subscription activated');
+    return ok(updated ?? [], 'Subscription activated');
   } catch {
     return serverError();
   }

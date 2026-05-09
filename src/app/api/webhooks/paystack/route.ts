@@ -136,19 +136,22 @@ async function handleChargeSuccess(
 
   if (!reference) return;
 
-  // Subscription payments — flip the matching subscription row to active.
+  // Subscription payments — flip every row that shares this reference to
+  // active. One Paystack checkout can unlock multiple (school, department)
+  // combos in the new model.
   if (purpose === 'subscription') {
-    const { data: sub } = await supabase
+    const { data: rows } = await supabase
       .from('subscriptions')
       .select('*')
-      .eq('reference', reference)
-      .single();
-    if (!sub || sub.status === 'active') return;
+      .eq('reference', reference);
+    if (!rows || rows.length === 0) return;
+    if (rows.every((r) => r.status === 'active')) return;
 
     const { SUBSCRIPTION_PLANS, planEndDate } = await import('@/lib/subscriptions/plans');
-    const plan = SUBSCRIPTION_PLANS[sub.plan];
+    const plan = rows[0].plan;
+    const planLabel = SUBSCRIPTION_PLANS[plan].label;
     const startsAt = new Date();
-    const endsAt = planEndDate(sub.plan, startsAt);
+    const endsAt = planEndDate(plan, startsAt);
 
     await supabase
       .from('subscriptions')
@@ -157,12 +160,13 @@ async function handleChargeSuccess(
         starts_at: startsAt.toISOString(),
         ends_at: endsAt.toISOString(),
       })
-      .eq('id', sub.id);
+      .eq('reference', reference);
 
+    const departmentList = rows.map((r) => `${r.department} (${r.school})`).join(', ');
     await supabase.from('notifications').insert({
-      user_id: sub.user_id,
+      user_id: rows[0].user_id,
       title: 'Subscription activated',
-      body: `Your ${plan.label} plan is active until ${endsAt.toLocaleDateString('en-NG')}.`,
+      body: `Your ${planLabel} plan is active for: ${departmentList}. Expires ${endsAt.toLocaleDateString('en-NG')}.`,
       type: 'subscription',
     });
     return;
