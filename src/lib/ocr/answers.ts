@@ -93,6 +93,8 @@ const GRADE_PROMPT = `You are an expert university lecturer grading short-answer
 You are given the question, the student's answer, and (optionally) a reference answer.
 Decide how close the student's answer is to a fully correct one.
 
+If no reference answer is provided, work out the best academically-defensible answer from your own knowledge first, then grade the student's response against that. Never refuse to grade because the reference is missing.
+
 Return a JSON object: { "score": <number 0-1, two decimals>, "feedback": "<two short sentences>" }
 
 Scoring rubric:
@@ -104,6 +106,7 @@ Scoring rubric:
 - 0.00 : blank, off-topic or completely wrong.
 
 Be strict but fair. Reward correct reasoning even when wording differs.
+Speak directly to the student in the feedback. Don't refer to yourself, "AI", or "the model".
 Return ONLY the JSON object — no markdown, no preamble.`;
 
 export interface ExplanationResult {

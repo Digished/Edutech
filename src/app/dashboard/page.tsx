@@ -25,18 +25,23 @@ interface UserProfile {
   role: 'student' | 'contributor' | 'admin';
 }
 
+interface UnlockedDept {
+  id: string;
+  school: string;
+  department: string;
+  plan: 'monthly' | 'quarterly' | 'yearly';
+  ends_at: string | null;
+}
+
 interface ContributorStatus {
   role: 'student' | 'contributor' | 'admin';
+  is_admin: boolean;
   is_contributor: boolean;
+  has_full_access: boolean;
   approved_contributions: number;
   promotion_threshold: number;
   progress_to_contributor: number;
-  has_active_subscription: boolean;
-  subscription: {
-    plan: 'monthly' | 'quarterly' | 'yearly';
-    status: string;
-    ends_at: string | null;
-  } | null;
+  unlocked_departments: UnlockedDept[];
 }
 
 interface PausedSession {
@@ -44,12 +49,6 @@ interface PausedSession {
   answers: Record<string, string>;
   startedAt: number;
 }
-
-const PLAN_LABEL: Record<string, string> = {
-  monthly: 'Monthly',
-  quarterly: '3 months',
-  yearly: '12 months',
-};
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -141,19 +140,19 @@ export default function DashboardPage() {
   if (!user) return null;
 
   const firstName = user.full_name?.split(' ')[0] ?? 'there';
+  const isAdmin = status?.is_admin ?? false;
   const isContributor = status?.is_contributor ?? false;
-  const hasSub = status?.has_active_subscription ?? false;
+  const unlocked = status?.unlocked_departments ?? [];
+  const accessUnlocked = isAdmin || unlocked.length > 0;
   const promoPct = status
     ? Math.min(100, Math.round((status.approved_contributions / status.promotion_threshold) * 100))
     : 0;
-
-  const accessUnlocked = isContributor || hasSub;
 
   const actions = [
     {
       label: accessUnlocked ? 'Browse questions' : 'Subscribe to browse',
       href: accessUnlocked ? '/questions' : '/dashboard/subscription',
-      desc: accessUnlocked ? 'Search the full bank' : 'Unlock the question bank',
+      desc: accessUnlocked ? 'Search your unlocked departments' : 'Unlock a department to browse',
       Icon: BookIcon,
     },
     { label: 'Practice exam', href: '/dashboard/practice', desc: 'Sit a mock exam', Icon: FlaskIcon },
@@ -176,18 +175,20 @@ export default function DashboardPage() {
             <span className="hidden sm:inline-flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
               <span
                 className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium ${
-                  isContributor
+                  isAdmin
+                    ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-400'
+                    : isContributor
                     ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400'
                     : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200'
                 }`}
               >
                 <GraduationIcon size={12} />
-                {isContributor ? 'Contributor' : 'Student'}
+                {isAdmin ? 'Admin' : isContributor ? 'Contributor' : 'Student'}
               </span>
-              {hasSub && !isContributor && (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-400 font-medium">
+              {!isAdmin && unlocked.length > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400 font-medium">
                   <SparklesIcon size={12} />
-                  Subscribed
+                  {unlocked.length} unlocked
                 </span>
               )}
               <span className="text-zinc-400">{user.email}</span>
@@ -208,7 +209,11 @@ export default function DashboardPage() {
             Hello, {firstName}
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            {user.school ?? 'No university set'}{user.department ? ` · ${user.department}` : ''}
+            {isAdmin
+              ? 'Admin · full access'
+              : unlocked.length === 0
+              ? 'No departments unlocked yet'
+              : `${unlocked.length} department${unlocked.length === 1 ? '' : 's'} unlocked`}
           </p>
         </div>
 
@@ -235,35 +240,50 @@ export default function DashboardPage() {
 
         {/* Status strip */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-          {/* Subscription / access tile — always points at the subscription page */}
+          {/* Subscriptions tile — always points at the subscription page */}
           <Link
             href="/dashboard/subscription"
-            className="group bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between hover:border-green-300 transition-colors"
+            className="group bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 hover:border-green-300 transition-colors"
           >
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-zinc-400">Access</div>
-              <div className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-white mt-0.5">
-                {isContributor
-                  ? 'Contributor — full access'
-                  : hasSub && status?.subscription
-                  ? `${PLAN_LABEL[status.subscription.plan] ?? 'Subscribed'} active`
-                  : 'Locked — subscribe to browse'}
-              </div>
-              {status?.subscription?.ends_at && hasSub && (
-                <div className="text-[11px] text-zinc-400 mt-0.5">
-                  Until {new Date(status.subscription.ends_at).toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' })}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] uppercase tracking-wide text-zinc-400">Subscriptions</div>
+                <div className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-white mt-0.5">
+                  {isAdmin
+                    ? 'Full access'
+                    : unlocked.length === 0
+                    ? 'No departments unlocked'
+                    : `${unlocked.length} department${unlocked.length === 1 ? '' : 's'} unlocked`}
                 </div>
-              )}
+                <div className="text-[11px] text-zinc-400 mt-0.5">
+                  {isAdmin ? 'Manage subscriptions' : 'Manage or add departments'}
+                </div>
+              </div>
+              <span
+                className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
+                  accessUnlocked
+                    ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400'
+                    : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:bg-green-50 group-hover:text-green-700'
+                }`}
+              >
+                {accessUnlocked ? <SparklesIcon size={16} /> : <LockIcon size={16} />}
+              </span>
             </div>
-            <span
-              className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${
-                accessUnlocked
-                  ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-400'
-                  : 'bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 group-hover:bg-green-50 group-hover:text-green-700'
-              }`}
-            >
-              {accessUnlocked ? <SparklesIcon size={16} /> : <LockIcon size={16} />}
-            </span>
+            {!isAdmin && unlocked.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {unlocked.slice(0, 4).map((d) => (
+                  <span
+                    key={d.id}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                  >
+                    {d.department}
+                  </span>
+                ))}
+                {unlocked.length > 4 && (
+                  <span className="text-[10px] text-zinc-400">+{unlocked.length - 4} more</span>
+                )}
+              </div>
+            )}
           </Link>
 
           {/* Contributions tile with progress */}

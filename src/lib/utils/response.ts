@@ -16,13 +16,15 @@ export function paginated<T>(
   total: number,
   page: number,
   limit: number,
+  extra?: Record<string, unknown>,
 ): NextResponse {
-  const body: PaginatedResponse<T> = {
+  const body: PaginatedResponse<T> & Record<string, unknown> = {
     data: items,
     total,
     page,
     limit,
-    totalPages: Math.ceil(total / limit),
+    totalPages: limit > 0 ? Math.ceil(total / limit) : 0,
+    ...(extra ?? {}),
   };
   return NextResponse.json(body, { status: 200 });
 }

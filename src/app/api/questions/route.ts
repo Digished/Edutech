@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
+import { loadAccessSummary } from '@/lib/access/gate';
 import {
-  created, badRequest, forbidden, unauthorized, serverError, paginated,
+  created, badRequest, unauthorized, serverError, paginated,
 } from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
 import { hashQuestionText } from '@/lib/utils/hash';
@@ -25,31 +26,48 @@ const schema = z.object({
 
 const CONTRIBUTOR_PROMOTION_THRESHOLD = 100;
 
-// GET /api/questions?course_id=&year=&page=&limit= — auth + active subscription required
-// (contributors and admins always have access).
+// GET /api/questions?course_id=&year=&page=&limit= — auth required. Results are
+// limited to questions in (school, department) combos the user has unlocked
+// (admins see everything).
 export async function GET(req: NextRequest) {
   try {
     const { profile, error: authErr } = await requireRole(['student', 'contributor', 'admin']);
     if (authErr || !profile) return unauthorized(authErr ?? 'Sign in to browse questions');
 
-    const requiresSubscription = profile.role === 'student';
-    if (requiresSubscription) {
-      const admin = createAdminClient();
-      const { data: hasSub } = await admin.rpc('has_active_subscription', {
-        p_user_id: profile.id,
-      });
-      if (!hasSub) {
-        return forbidden('Subscribe to unlock the full question bank');
-      }
+    const access = await loadAccessSummary(profile);
+    if (!access.hasFullAccess && access.unlocked.length === 0) {
+      return paginated([], 0, 1, 0, { unlocked: [] });
     }
 
     const { searchParams } = req.nextUrl;
     const course_id = searchParams.get('course_id');
+    const school = searchParams.get('school');
+    const department = searchParams.get('department');
     const year = searchParams.get('year');
     const question_type = searchParams.get('question_type');
     const page = parseInt(searchParams.get('page') ?? '1');
     const limit = parseInt(searchParams.get('limit') ?? '20');
     const { from, to } = getPagination(page, limit);
+
+    const adminClient = createAdminClient();
+
+    // Resolve the course IDs the user is allowed to see, then filter questions
+    // by course_id. Cleaner than trying to do multi-column IN over a join.
+    let allowedCourseIds: string[] | null = null;
+    if (!access.hasFullAccess) {
+      const orPairs = access.unlocked.map(
+        (u) => `and(school.eq."${escapeFilter(u.school)}",department.eq."${escapeFilter(u.department)}")`,
+      );
+      const { data: rows, error: courseErr } = await adminClient
+        .from('courses')
+        .select('id')
+        .or(orPairs.join(','));
+      if (courseErr) return serverError(courseErr.message);
+      allowedCourseIds = (rows ?? []).map((r) => r.id);
+      if (allowedCourseIds.length === 0) {
+        return paginated([], 0, 1, limit, { unlocked: access.unlocked });
+      }
+    }
 
     const supabase = await createClient();
     let query = supabase
@@ -61,10 +79,22 @@ export async function GET(req: NextRequest) {
       .eq('status', 'approved')
       .eq('is_deleted', false);
 
+    if (allowedCourseIds) query = query.in('course_id', allowedCourseIds);
     if (course_id) query = query.eq('course_id', course_id);
     if (year) query = query.eq('year', parseInt(year));
     if (question_type === 'mcq' || question_type === 'theory') {
       query = query.eq('question_type', question_type);
+    }
+    // school/department text filters apply to the join table.
+    if (school || department) {
+      const join = supabase
+        .from('courses')
+        .select('id');
+      const filtered = school ? join.eq('school', school) : join;
+      const final = department ? filtered.eq('department', department) : filtered;
+      const { data: filteredCourses } = await final;
+      const filteredIds = (filteredCourses ?? []).map((c) => c.id);
+      query = query.in('course_id', filteredIds.length > 0 ? filteredIds : ['00000000-0000-0000-0000-000000000000']);
     }
 
     const { data, count, error } = await query
@@ -72,17 +102,19 @@ export async function GET(req: NextRequest) {
       .range(from, to);
 
     if (error) return serverError(error.message);
-    // Strip correct_answer from the listing response so the right answer can't
-    // be peeked from the network tab — the per-question GET reveals it.
     const sanitized = (data ?? []).map((row) => {
       const { correct_answer: _omit, ...rest } = row as Record<string, unknown>;
       void _omit;
       return rest;
     });
-    return paginated(sanitized, count ?? 0, page, limit);
+    return paginated(sanitized, count ?? 0, page, limit, { unlocked: access.unlocked });
   } catch {
     return serverError();
   }
+}
+
+function escapeFilter(value: string): string {
+  return value.replace(/"/g, '\\"');
 }
 
 // POST /api/questions — students may submit (for review); they get the contributor

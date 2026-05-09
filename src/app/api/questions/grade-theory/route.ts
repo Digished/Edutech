@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/utils/auth';
 import { gradeTheoryAnswer } from '@/lib/ocr/answers';
-import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
+import { canRead, loadAccessSummary } from '@/lib/access/gate';
+import { ok, badRequest, forbidden, unauthorized, notFound, serverError } from '@/lib/utils/response';
 
 const schema = z.object({
   question_id: z.string().uuid(),
@@ -24,7 +25,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const { data: question } = await supabase
       .from('questions')
-      .select('id, question_text, question_type, correct_answer, status, is_deleted')
+      .select('id, question_text, question_type, correct_answer, status, is_deleted, courses(school, department)')
       .eq('id', parsed.data.question_id)
       .single();
 
@@ -32,9 +33,17 @@ export async function POST(req: NextRequest) {
       return notFound('Question not found');
     }
     if (question.question_type !== 'theory') {
-      return badRequest('AI grading is only available for theory questions');
+      return badRequest('Theory grading is only available for theory questions');
     }
 
+    const access = await loadAccessSummary(profile);
+    const courseRow = (question.courses ?? null) as unknown as { school: string | null; department: string | null } | null;
+    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
+      return forbidden('Subscribe to unlock this department');
+    }
+
+    // gradeTheoryAnswer accepts a null reference and grades from the model's
+    // own knowledge — we always call it.
     const grade = await gradeTheoryAnswer(
       question.question_text,
       parsed.data.answer,

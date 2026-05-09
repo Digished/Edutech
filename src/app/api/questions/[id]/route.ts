@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole, getAuthUser } from '@/lib/utils/auth';
+import { canRead, loadAccessSummary } from '@/lib/access/gate';
 import {
   ok, badRequest, forbidden, unauthorized, notFound, serverError,
 } from '@/lib/utils/response';
@@ -24,17 +25,7 @@ export async function GET(
     const { profile } = await getAuthUser();
     if (!profile) return unauthorized('Sign in to view this question');
 
-    if (profile.role === 'student') {
-      const { data: hasSub } = await createAdminClient().rpc('has_active_subscription', {
-        p_user_id: profile.id,
-      });
-      if (!hasSub) {
-        return forbidden('Subscribe to unlock the full question bank');
-      }
-    }
-
     const supabase = await createClient();
-
     const { data, error } = await supabase
       .from('questions')
       .select(`*, courses(name, school, department, code), question_analytics(views_count, last_viewed_at)`)
@@ -44,10 +35,13 @@ export async function GET(
 
     if (error || !data) return notFound('Question not found');
 
-    // Increment view count — await so the request actually fires before the
-    // serverless function returns. Use the admin client so it bypasses RLS.
-    await createAdminClient().rpc('increment_question_views', { p_question_id: id });
+    const access = await loadAccessSummary(profile);
+    const courseRow = (data as unknown as { courses: { school: string | null; department: string | null } | null }).courses;
+    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
+      return forbidden('Subscribe to unlock this department');
+    }
 
+    await createAdminClient().rpc('increment_question_views', { p_question_id: id });
     return ok(data);
   } catch {
     return serverError();

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
 import { generateExplanation } from '@/lib/ocr/answers';
+import { canRead, loadAccessSummary } from '@/lib/access/gate';
 import { ok, unauthorized, forbidden, notFound, serverError } from '@/lib/utils/response';
 import type { QuestionOptions } from '@/types/database';
 
@@ -19,11 +20,17 @@ export async function GET(
 
     const { data: question } = await admin
       .from('questions')
-      .select('id, status, is_deleted, explanation, explanation_generated_at')
+      .select('id, status, is_deleted, explanation, explanation_generated_at, courses(school, department)')
       .eq('id', id)
       .single();
     if (!question || question.is_deleted || question.status !== 'approved') {
       return notFound('Question not found');
+    }
+
+    const access = await loadAccessSummary(profile);
+    const courseRow = (question.courses ?? null) as unknown as { school: string | null; department: string | null } | null;
+    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
+      return forbidden('Subscribe to unlock this department');
     }
 
     return ok({
@@ -49,20 +56,19 @@ export async function POST(
     const { id } = await params;
     const admin = createAdminClient();
 
-    if (profile.role === 'student') {
-      const { data: hasSub } = await admin.rpc('has_active_subscription', {
-        p_user_id: profile.id,
-      });
-      if (!hasSub) return forbidden('Subscribe to unlock explanations');
-    }
-
     const { data: question } = await admin
       .from('questions')
-      .select('id, status, is_deleted, question_text, question_type, options, correct_answer, explanation, explanation_generated_at')
+      .select('id, status, is_deleted, question_text, question_type, options, correct_answer, explanation, explanation_generated_at, courses(school, department)')
       .eq('id', id)
       .single();
     if (!question || question.is_deleted || question.status !== 'approved') {
       return notFound('Question not found');
+    }
+
+    const access = await loadAccessSummary(profile);
+    const courseRow = (question.courses ?? null) as unknown as { school: string | null; department: string | null } | null;
+    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
+      return forbidden('Subscribe to unlock this department');
     }
 
     // Cache hit — return immediately.

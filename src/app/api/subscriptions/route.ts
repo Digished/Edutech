@@ -4,14 +4,20 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/utils/auth';
 import { initializeTransaction } from '@/lib/paystack/charges';
 import { generateReference } from '@/lib/utils/hash';
-import { SUBSCRIPTION_PLANS } from '@/lib/subscriptions/plans';
+import { paidShareForCombo, priceBundle } from '@/lib/subscriptions/plans';
 import {
   created, badRequest, unauthorized, serverError, paginated,
 } from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
 
+const comboSchema = z.object({
+  school: z.string().min(2),
+  department: z.string().min(2),
+});
+
 const schema = z.object({
   plan: z.enum(['monthly', 'quarterly', 'yearly']),
+  combos: z.array(comboSchema).min(1).max(20),
   callback_path: z.string().optional(),
 });
 
@@ -40,7 +46,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/subscriptions — start a Paystack-hosted checkout for the chosen plan.
+// POST /api/subscriptions — start a Paystack checkout that will unlock the
+// chosen list of (school, department) combos. Each combo becomes one row in
+// the subscriptions table; all rows share the same Paystack `reference` so
+// they activate together when the charge succeeds.
 export async function POST(req: NextRequest) {
   try {
     const { authUser, profile, error } = await getAuthUser();
@@ -50,7 +59,18 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
-    const plan = SUBSCRIPTION_PLANS[parsed.data.plan];
+    // Dedup combos within a single checkout.
+    const seen = new Set<string>();
+    const combos = parsed.data.combos.filter((c) => {
+      const key = `${c.school}::${c.department}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    if (combos.length === 0) return badRequest('Pick at least one department');
+
+    const isContributor = profile.role === 'contributor' || profile.role === 'admin';
+
     const reference = generateReference('SUB');
     const origin = req.nextUrl.origin;
     const callbackPath = parsed.data.callback_path && parsed.data.callback_path.startsWith('/')
@@ -59,40 +79,63 @@ export async function POST(req: NextRequest) {
 
     const admin = createAdminClient();
 
-    const { data: sub, error: insertErr } = await admin
+    // Skip combos the user already has active — no point double-paying.
+    const { data: alreadyActive } = await admin.rpc('list_unlocked_departments', {
+      p_user_id: authUser.id,
+    });
+    const activeKeys = new Set(
+      (alreadyActive ?? []).map((r) => `${r.school}::${r.department}`),
+    );
+    const fresh = combos.filter((c) => !activeKeys.has(`${c.school}::${c.department}`));
+    if (fresh.length === 0) {
+      return badRequest('You already have active access to every department you selected');
+    }
+
+    const freshPricing = priceBundle(parsed.data.plan, fresh.length, isContributor);
+    const freshPerRow = paidShareForCombo(parsed.data.plan, fresh.length, isContributor);
+
+    const rows = fresh.map((c) => ({
+      user_id: authUser.id,
+      plan: parsed.data.plan,
+      amount: freshPerRow,
+      currency: 'NGN',
+      reference,
+      status: 'pending' as const,
+      school: c.school,
+      department: c.department,
+      contributor_discount_applied: isContributor,
+    }));
+
+    const { data: insertedRows, error: insertErr } = await admin
       .from('subscriptions')
-      .insert({
-        user_id: authUser.id,
-        plan: parsed.data.plan,
-        amount: plan.amount,
-        currency: 'NGN',
-        reference,
-        status: 'pending',
-      })
-      .select()
-      .single();
+      .insert(rows)
+      .select('id, school, department');
     if (insertErr) return serverError(insertErr.message);
 
     try {
       const init = await initializeTransaction({
         email: profile.email,
-        amount: Math.round(plan.amount * 100),
+        amount: Math.round(freshPricing.net * 100),
         reference,
         callback_url: `${origin}${callbackPath}?reference=${reference}`,
         metadata: {
           purpose: 'subscription',
           plan: parsed.data.plan,
           user_id: authUser.id,
+          combo_count: fresh.length,
+          contributor_discount: isContributor,
         },
       });
 
       await admin
         .from('subscriptions')
         .update({ paystack_access_code: init.access_code })
-        .eq('id', sub.id);
+        .eq('reference', reference);
 
       return created({
-        subscription: { ...sub, paystack_access_code: init.access_code },
+        rows: insertedRows ?? [],
+        pricing: { ...freshPricing, attempted: combos.length, billable: fresh.length },
+        skipped_combos: combos.length - fresh.length,
         authorization_url: init.authorization_url,
         reference: init.reference,
       });
@@ -100,7 +143,7 @@ export async function POST(req: NextRequest) {
       await admin
         .from('subscriptions')
         .update({ status: 'cancelled' })
-        .eq('id', sub.id);
+        .eq('reference', reference);
       const msg = err instanceof Error ? err.message : 'Could not start checkout';
       return serverError(msg);
     }
@@ -108,3 +151,4 @@ export async function POST(req: NextRequest) {
     return serverError();
   }
 }
+

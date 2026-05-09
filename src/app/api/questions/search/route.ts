@@ -2,8 +2,9 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
+import { loadAccessSummary } from '@/lib/access/gate';
 import {
-  serverError, paginated, badRequest, forbidden, unauthorized,
+  serverError, paginated, badRequest, unauthorized,
 } from '@/lib/utils/response';
 import { getPagination } from '@/lib/utils/pagination';
 
@@ -13,13 +14,9 @@ export async function GET(req: NextRequest) {
     const { profile, error: authErr } = await requireRole(['student', 'contributor', 'admin']);
     if (authErr || !profile) return unauthorized(authErr ?? 'Sign in to search');
 
-    if (profile.role === 'student') {
-      const { data: hasSub } = await createAdminClient().rpc('has_active_subscription', {
-        p_user_id: profile.id,
-      });
-      if (!hasSub) {
-        return forbidden('Subscribe to unlock the full question bank');
-      }
+    const access = await loadAccessSummary(profile);
+    if (!access.hasFullAccess && access.unlocked.length === 0) {
+      return paginated([], 0, 1, 0, { unlocked: [] });
     }
 
     const { searchParams } = req.nextUrl;
@@ -33,6 +30,19 @@ export async function GET(req: NextRequest) {
 
     if (!q || q.trim().length < 3) return badRequest('Search query must be at least 3 characters');
 
+    let allowedCourseIds: string[] | null = null;
+    if (!access.hasFullAccess) {
+      const adminClient = createAdminClient();
+      const orPairs = access.unlocked.map(
+        (u) => `and(school.eq."${u.school.replace(/"/g, '\\"')}",department.eq."${u.department.replace(/"/g, '\\"')}")`,
+      );
+      const { data: rows } = await adminClient.from('courses').select('id').or(orPairs.join(','));
+      allowedCourseIds = (rows ?? []).map((r) => r.id);
+      if (allowedCourseIds.length === 0) {
+        return paginated([], 0, 1, limit, { unlocked: access.unlocked });
+      }
+    }
+
     const supabase = await createClient();
 
     let query = supabase
@@ -45,6 +55,7 @@ export async function GET(req: NextRequest) {
       .eq('is_deleted', false)
       .textSearch('question_text', q, { type: 'websearch', config: 'english' });
 
+    if (allowedCourseIds) query = query.in('course_id', allowedCourseIds);
     if (course_id) query = query.eq('course_id', course_id);
     if (school) query = query.eq('courses.school', school);
     if (department) query = query.eq('courses.department', department);
@@ -59,7 +70,7 @@ export async function GET(req: NextRequest) {
       void _omit;
       return rest;
     });
-    return paginated(sanitized, count ?? 0, page, limit);
+    return paginated(sanitized, count ?? 0, page, limit, { unlocked: access.unlocked });
   } catch {
     return serverError();
   }
