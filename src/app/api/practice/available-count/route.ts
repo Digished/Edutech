@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
       .map((s) => s.trim())
       .filter(Boolean);
     const questionType = searchParams.get('question_type');
+    const level = searchParams.get('level');
+    const semester = searchParams.get('semester');
 
     const adminClient = createAdminClient();
 
@@ -55,6 +57,8 @@ export async function GET(req: NextRequest) {
     if (questionType === 'mcq' || questionType === 'theory') {
       q = q.eq('question_type', questionType);
     }
+    if (level)    q = q.eq('level', parseInt(level));
+    if (semester) q = q.eq('semester', parseInt(semester));
     const { count } = await q;
     return ok({ total: count ?? 0, allowed_courses: allowedCourseIds.length });
   } catch {

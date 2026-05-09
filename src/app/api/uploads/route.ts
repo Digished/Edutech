@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const course_id = formData.get('course_id') as string | null;
+    const levelRaw = formData.get('level');
+    const semesterRaw = formData.get('semester');
 
     if (!file) return badRequest('No file provided');
     if (!course_id) return badRequest('course_id is required');
@@ -54,6 +56,17 @@ export async function POST(req: NextRequest) {
       return badRequest('Invalid course_id');
 
     if (file.size > MAX_FILE_SIZE) return badRequest('File size exceeds 20MB limit');
+
+    // Level (100-600) and semester (1/2/3) are required and propagate to every
+    // extracted question on confirm.
+    const level = levelRaw ? parseInt(String(levelRaw)) : NaN;
+    const semester = semesterRaw ? parseInt(String(semesterRaw)) : NaN;
+    if (![100, 200, 300, 400, 500, 600].includes(level)) {
+      return badRequest('Pick a level (100-600)');
+    }
+    if (![1, 2, 3].includes(semester)) {
+      return badRequest('Pick a semester (1, 2 or 3)');
+    }
 
     const mimeToType: Record<string, 'pdf' | 'image'> = {
       'application/pdf': 'pdf',
@@ -98,6 +111,8 @@ export async function POST(req: NextRequest) {
       .insert({
         user_id: profile.id,
         course_id,
+        level,
+        semester,
         file_url: storagePath,
         file_type,
         original_name: file.name,

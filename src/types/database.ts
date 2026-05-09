@@ -13,6 +13,14 @@ export type FileType = 'pdf' | 'image';
 export type ModerationStatus = 'pending' | 'approved' | 'rejected';
 export type QuestionType = 'mcq' | 'theory';
 
+export const COURSE_LEVELS = [100, 200, 300, 400, 500, 600] as const;
+export type CourseLevel = (typeof COURSE_LEVELS)[number];
+
+export const SEMESTERS = [1, 2, 3] as const;
+export type Semester = (typeof SEMESTERS)[number];
+
+export const HIGH_YIELD_BONUS_PER_TAG = 0.2;
+
 export interface User {
   id: string;
   email: string;
@@ -26,9 +34,37 @@ export interface User {
   updated_at: string;
 }
 
+export interface University {
+  id: string;
+  name: string;
+  short_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Faculty {
+  id: string;
+  university_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Department {
+  id: string;
+  faculty_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Course {
   id: string;
+  university_id: string;
+  faculty_id: string;
+  department_id: string;
   school: string;
+  faculty: string;
   department: string;
   name: string;
   code: string | null;
@@ -37,7 +73,7 @@ export interface Course {
   updated_at: string;
 }
 
-export type QuestionOptions = Record<string, string>; // { A: "...", B: "...", ... }
+export type QuestionOptions = Record<string, string>;
 
 export interface Question {
   id: string;
@@ -46,12 +82,16 @@ export interface Question {
   options: QuestionOptions | null;
   correct_answer: string | null;
   year: number | null;
+  level: CourseLevel | null;
+  semester: Semester | null;
   question_type: QuestionType;
   source_type: SourceType;
   status: ModerationStatus;
   is_deleted: boolean;
   content_hash: string | null;
   image_urls: string[] | null;
+  explanation: string | null;
+  explanation_generated_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,10 +105,19 @@ export interface QuestionContribution {
   created_at: string;
 }
 
+export interface HighYieldTag {
+  id: string;
+  question_id: string;
+  user_id: string;
+  created_at: string;
+}
+
 export interface Upload {
   id: string;
   user_id: string;
   course_id: string;
+  level: CourseLevel | null;
+  semester: Semester | null;
   file_url: string;
   file_type: FileType;
   original_name: string | null;
@@ -78,6 +127,7 @@ export interface Upload {
   questions_extracted: number;
   progress: number;
   processing_stage: string | null;
+  needs_review: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -179,7 +229,11 @@ export interface Subscription {
   paystack_access_code: string | null;
   starts_at: string | null;
   ends_at: string | null;
+  university_id: string | null;
+  faculty_id: string | null;
+  department_id: string | null;
   school: string | null;
+  faculty: string | null;
   department: string | null;
   contributor_discount_applied: boolean;
   created_at: string;
@@ -188,7 +242,11 @@ export interface Subscription {
 
 export interface UnlockedDepartment {
   id: string;
+  university_id: string | null;
+  faculty_id: string | null;
+  department_id: string | null;
   school: string;
+  faculty: string | null;
   department: string;
   plan: SubscriptionPlan;
   starts_at: string | null;

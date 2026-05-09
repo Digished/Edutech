@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 interface Course {
   id: string;
   school: string;
+  faculty: string;
   department: string;
   name: string;
   code: string | null;
@@ -39,18 +40,16 @@ export default function AdminCoursesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Admins can rename a course or change its code; reassigning to a different
+  // department/faculty would require recomputing every linked question, so
+  // we don't support that from the UI.
   async function save(c: Course) {
     setBusy(c.id);
     try {
       const res = await fetch(`/api/courses/${c.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          school: c.school,
-          department: c.department,
-          name: c.name,
-          code: c.code ?? '',
-        }),
+        body: JSON.stringify({ name: c.name, code: c.code ?? null }),
       });
       if (res.ok) { setEditing(null); load(); }
     } finally {
@@ -75,7 +74,7 @@ export default function AdminCoursesPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Courses</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">Courses</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">{total.toLocaleString()} courses created by users.</p>
         </div>
       </div>
@@ -101,16 +100,15 @@ export default function AdminCoursesPage() {
           return (
             <div key={c.id} className="px-5 py-3">
               {isEditing ? (
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
                   <input value={row.name} onChange={(e) => setEditing({ ...row, name: e.target.value })}
                     placeholder="Name" className="px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm" />
                   <input value={row.code ?? ''} onChange={(e) => setEditing({ ...row, code: e.target.value })}
                     placeholder="Code" className="px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm" />
-                  <input value={row.school} onChange={(e) => setEditing({ ...row, school: e.target.value })}
-                    placeholder="University" className="px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm" />
-                  <input value={row.department} onChange={(e) => setEditing({ ...row, department: e.target.value })}
-                    placeholder="Department" className="px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm" />
-                  <div className="sm:col-span-4 flex gap-2">
+                  <div className="sm:col-span-2 text-[11px] text-zinc-400">
+                    {c.school} · {c.faculty ?? '—'} · {c.department}
+                  </div>
+                  <div className="sm:col-span-2 flex gap-2">
                     <button onClick={() => save(row)} disabled={busy === c.id} className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded-lg">Save</button>
                     <button onClick={() => setEditing(null)} className="px-3 py-1 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg">Cancel</button>
                   </div>
@@ -121,7 +119,9 @@ export default function AdminCoursesPage() {
                     <div className="text-sm text-zinc-900 dark:text-white font-medium truncate">
                       {c.name}{c.code ? ` (${c.code})` : ''}
                     </div>
-                    <div className="text-xs text-zinc-400 mt-0.5">{c.school} · {c.department}</div>
+                    <div className="text-xs text-zinc-400 mt-0.5 truncate">
+                      {c.school} · {c.faculty ?? '—'} · {c.department}
+                    </div>
                   </div>
                   <button onClick={() => setEditing(c)} className="px-3 py-1 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800">Edit</button>
                   <button onClick={() => remove(c.id)} disabled={busy === c.id} className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-950 dark:text-red-400 rounded-lg disabled:opacity-60">Delete</button>

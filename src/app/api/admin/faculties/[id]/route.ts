@@ -4,48 +4,33 @@ import { createClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/utils/auth';
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
 
-const updateSchema = z.object({
+const schema = z.object({
   name: z.string().min(1).optional(),
-  code: z.string().optional().nullable(),
+  university_id: z.string().uuid().optional(),
 });
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    const { id } = await params;
-    const supabase = await createClient();
-    const { data, error } = await supabase.from('courses').select('*').eq('id', id).single();
-    if (error || !data) return notFound('Course not found');
-    return ok(data);
-  } catch {
-    return serverError();
-  }
-}
-
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { profile, error } = await requireRole(['admin']);
     if (error || !profile) return unauthorized(error ?? 'Unauthorized');
 
     const { id } = await params;
     const body = await req.json();
-    const parsed = updateSchema.safeParse(body);
+    const parsed = schema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
     const supabase = await createClient();
     const { data, error: dbError } = await supabase
-      .from('courses')
+      .from('faculties')
       .update(parsed.data)
       .eq('id', id)
       .select()
       .single();
 
-    if (dbError) return serverError(dbError.message);
+    if (dbError) {
+      if (dbError.code === '23505') return badRequest('That faculty name already exists for this university');
+      return serverError(dbError.message);
+    }
     if (!data) return notFound();
     return ok(data);
   } catch {
@@ -53,18 +38,16 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { profile, error } = await requireRole(['admin']);
     if (error || !profile) return unauthorized(error ?? 'Unauthorized');
 
     const { id } = await params;
     const supabase = await createClient();
-    await supabase.from('courses').delete().eq('id', id);
-    return ok(null, 'Course deleted');
+    const { error: dbError } = await supabase.from('faculties').delete().eq('id', id);
+    if (dbError) return serverError(dbError.message);
+    return ok(null, 'Faculty deleted');
   } catch {
     return serverError();
   }

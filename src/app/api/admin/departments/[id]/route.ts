@@ -6,7 +6,7 @@ import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils
 
 const schema = z.object({
   name: z.string().min(1).optional(),
-  university_id: z.string().uuid().optional(),
+  faculty_id: z.string().uuid().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -28,7 +28,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .single();
 
     if (dbError) {
-      if (dbError.code === '23505') return badRequest('That department already exists for this university');
+      if (dbError.code === '23505') return badRequest('That department already exists for this faculty');
       return serverError(dbError.message);
     }
     if (!data) return notFound();

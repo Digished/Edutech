@@ -21,6 +21,8 @@ const schema = z.object({
     .optional(),
   correct_answer: z.string().nullable().optional(),
   year: z.number().int().min(1900).max(2100).nullable().optional(),
+  level: z.union([z.literal(100), z.literal(200), z.literal(300), z.literal(400), z.literal(500), z.literal(600)]).nullable().optional(),
+  semester: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
   image_urls: z.array(z.string().url()).max(8).optional(),
 });
 
@@ -43,7 +45,13 @@ export async function GET(req: NextRequest) {
     const course_id = searchParams.get('course_id');
     const school = searchParams.get('school');
     const department = searchParams.get('department');
+    const faculty = searchParams.get('faculty');
+    const universityId = searchParams.get('university_id');
+    const facultyId = searchParams.get('faculty_id');
+    const departmentId = searchParams.get('department_id');
     const year = searchParams.get('year');
+    const level = searchParams.get('level');
+    const semester = searchParams.get('semester');
     const question_type = searchParams.get('question_type');
     const page = parseInt(searchParams.get('page') ?? '1');
     const limit = parseInt(searchParams.get('limit') ?? '20');
@@ -82,17 +90,21 @@ export async function GET(req: NextRequest) {
     if (allowedCourseIds) query = query.in('course_id', allowedCourseIds);
     if (course_id) query = query.eq('course_id', course_id);
     if (year) query = query.eq('year', parseInt(year));
+    if (level) query = query.eq('level', parseInt(level));
+    if (semester) query = query.eq('semester', parseInt(semester));
     if (question_type === 'mcq' || question_type === 'theory') {
       query = query.eq('question_type', question_type);
     }
-    // school/department text filters apply to the join table.
-    if (school || department) {
-      const join = supabase
-        .from('courses')
-        .select('id');
-      const filtered = school ? join.eq('school', school) : join;
-      const final = department ? filtered.eq('department', department) : filtered;
-      const { data: filteredCourses } = await final;
+    // Course-level filters: text or FK ids both narrow the course set.
+    if (school || department || faculty || universityId || facultyId || departmentId) {
+      let join = supabase.from('courses').select('id');
+      if (universityId) join = join.eq('university_id', universityId);
+      if (facultyId)    join = join.eq('faculty_id', facultyId);
+      if (departmentId) join = join.eq('department_id', departmentId);
+      if (school)       join = join.eq('school', school);
+      if (faculty)      join = join.eq('faculty', faculty);
+      if (department)   join = join.eq('department', department);
+      const { data: filteredCourses } = await join;
       const filteredIds = (filteredCourses ?? []).map((c) => c.id);
       query = query.in('course_id', filteredIds.length > 0 ? filteredIds : ['00000000-0000-0000-0000-000000000000']);
     }
@@ -128,7 +140,7 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
-    const { course_id, question_text, question_type, options, correct_answer, year, image_urls } = parsed.data;
+    const { course_id, question_text, question_type, options, correct_answer, year, level, semester, image_urls } = parsed.data;
     if (question_type === 'mcq' && (!options || Object.keys(options).length < 2)) {
       return badRequest('Add at least two options for an MCQ');
     }
@@ -156,6 +168,8 @@ export async function POST(req: NextRequest) {
         options: question_type === 'mcq' ? options ?? null : null,
         correct_answer: correct_answer ?? null,
         year: year ?? null,
+        level: level ?? null,
+        semester: semester ?? null,
         source_type: 'manual',
         status: 'approved',
         content_hash,

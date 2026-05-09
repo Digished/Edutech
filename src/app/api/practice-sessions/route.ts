@@ -23,6 +23,8 @@ const schema = z.object({
   course_id: z.string().uuid().nullable().optional(),
   question_type: z.enum(['mcq', 'theory', 'all']).nullable().optional(),
   reveal_mode: z.enum(['after_each', 'at_end']).nullable().optional(),
+  level: z.union([z.literal(100), z.literal(200), z.literal(300), z.literal(400), z.literal(500), z.literal(600)]).nullable().optional(),
+  semester: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
   total_questions: z.number().int().min(1),
   duration_ms: z.number().int().min(0).nullable().optional(),
   details: z.array(detailSchema).max(200),
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
-    const { details, total_questions, duration_ms, course_id, question_type, reveal_mode } = parsed.data;
+    const { details, total_questions, duration_ms, course_id, question_type, reveal_mode, level, semester } = parsed.data;
     const graded = details.filter((d) => typeof d.score === 'number');
     const totalScore = graded.reduce((s, d) => s + (d.score ?? 0), 0);
     const correctCount = details.filter((d) => d.correct === true).length;
@@ -80,6 +82,8 @@ export async function POST(req: NextRequest) {
         course_id: course_id ?? null,
         question_type: question_type ?? null,
         reveal_mode: reveal_mode ?? null,
+        level: level ?? null,
+        semester: semester ?? null,
         total_questions,
         graded_count: graded.length,
         correct_count: correctCount,

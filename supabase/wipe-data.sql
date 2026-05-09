@@ -18,12 +18,16 @@ TRUNCATE
   public.question_flags,
   public.comment_upvotes,
   public.question_comments,
+  public.high_yield_tags,
   public.question_contributions,
   public.question_analytics,
   public.questions,
   public.upload_extractions,
   public.uploads,
-  public.courses
+  public.courses,
+  public.departments,
+  public.faculties,
+  public.universities
 RESTART IDENTITY CASCADE;
 
 -- Uncomment if you want to wipe revenue distribution history too:
