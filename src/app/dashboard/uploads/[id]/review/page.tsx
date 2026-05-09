@@ -1,8 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback, use } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
-import { ArrowLeftIcon, ArrowRightIcon } from '@/components/icons';
+import {
+  ArrowLeftIcon, ArrowRightIcon, AlertTriangleIcon, CheckIcon, PlusIcon, SparklesIcon, TrashIcon,
+} from '@/components/icons';
+import ImageUploader from '@/components/ImageUploader';
 
 interface Extraction {
   id: string;
@@ -17,6 +20,9 @@ interface Extraction {
   duplicate_of: string | null;
   excluded: boolean;
   confirmed: boolean;
+  image_urls: string[] | null;
+  has_figure: boolean | null;
+  updated_at?: string | null;
 }
 
 interface UploadInfo {
@@ -28,6 +34,8 @@ interface UploadInfo {
   needs_review: boolean;
 }
 
+const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
 export default function ReviewExtractionsPage({
   params,
 }: {
@@ -38,7 +46,6 @@ export default function ReviewExtractionsPage({
   const [items, setItems] = useState<Extraction[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirming, setConfirming] = useState(false);
-  const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [done, setDone] = useState<{ published: number; skipped: number } | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -51,7 +58,11 @@ export default function ReviewExtractionsPage({
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? 'Failed to load extractions'); return; }
       setUpload(json.data?.upload ?? null);
-      setItems(json.data?.extractions ?? []);
+      const list: Extraction[] = (json.data?.extractions ?? []).map((e: Extraction) => ({
+        ...e,
+        image_urls: Array.isArray(e.image_urls) ? e.image_urls : [],
+      }));
+      setItems(list);
     } finally {
       setLoading(false);
     }
@@ -63,19 +74,20 @@ export default function ReviewExtractionsPage({
     setItems((prev) => prev.map((e) => (e.id === extId ? { ...e, ...patch } : e)));
   }
 
-  async function save(extId: string, patch: Partial<Extraction>) {
-    setSavingId(extId);
-    try {
-      const res = await fetch(`/api/uploads/${id}/extractions/${extId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      const json = await res.json();
-      if (res.ok) patchLocal(extId, json.data);
-    } finally {
-      setSavingId(null);
-    }
+  async function persist(extId: string, patch: Partial<Extraction>) {
+    const res = await fetch(`/api/uploads/${id}/extractions/${extId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    const json = await res.json();
+    if (res.ok) patchLocal(extId, json.data);
+    return res.ok;
+  }
+
+  async function deleteExt(extId: string) {
+    const res = await fetch(`/api/uploads/${id}/extractions/${extId}`, { method: 'DELETE' });
+    if (res.ok) setItems((prev) => prev.filter((e) => e.id !== extId));
   }
 
   async function confirmAll() {
@@ -88,6 +100,9 @@ export default function ReviewExtractionsPage({
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? 'Could not publish'); return; }
       setDone({ published: json.data?.published ?? 0, skipped: json.data?.skipped ?? 0 });
+      // Scroll to top + refresh data so the user sees the new state.
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      await load();
     } finally {
       setConfirming(false);
     }
@@ -118,8 +133,9 @@ export default function ReviewExtractionsPage({
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Review extracted questions</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Edit anything you need to fix, drop questions you don&apos;t want to publish, then click Confirm.
-            Duplicates of questions already in the bank are skipped automatically.
+            Edit anything you need to fix, attach images for any figure-based questions,
+            and delete the ones you don&apos;t want to publish. Duplicates of existing
+            questions are skipped automatically.
           </p>
         </div>
 
@@ -164,9 +180,8 @@ export default function ReviewExtractionsPage({
                   key={e.id}
                   index={idx + 1}
                   ext={e}
-                  saving={savingId === e.id}
-                  onPatchLocal={(p) => patchLocal(e.id, p)}
-                  onSave={(p) => save(e.id, p)}
+                  onPersist={(p) => persist(e.id, p)}
+                  onDelete={() => deleteExt(e.id)}
                 />
               ))}
             </div>
@@ -223,50 +238,146 @@ export default function ReviewExtractionsPage({
   );
 }
 
-function ExtractionCard({
-  index,
-  ext,
-  saving,
-  onPatchLocal,
-  onSave,
-}: {
+interface CardProps {
   index: number;
   ext: Extraction;
-  saving: boolean;
-  onPatchLocal: (p: Partial<Extraction>) => void;
-  onSave: (p: Partial<Extraction>) => void;
-}) {
-  const optKeys = ['A', 'B', 'C', 'D', 'E'];
-  const opts = ext.options ?? {};
+  onPersist: (p: Partial<Extraction>) => Promise<boolean>;
+  onDelete: () => void;
+}
 
-  function setOption(key: string, value: string) {
-    const next = { ...opts, [key]: value };
-    onPatchLocal({ options: next });
+// One card holds all of its own draft state and only persists when the user
+// blurs / clicks save. Avoids the "everything autosaves separately" jank.
+function ExtractionCard({ index, ext, onPersist, onDelete }: CardProps) {
+  const [questionText, setQuestionText] = useState(ext.question_text);
+  const [questionType, setQuestionType] = useState<'mcq' | 'theory'>(ext.question_type);
+  const [optionsList, setOptionsList] = useState<{ key: string; value: string }[]>(
+    ext.options
+      ? Object.entries(ext.options)
+          .map(([k, v]) => ({ key: k, value: String(v) }))
+          .sort((a, b) => a.key.localeCompare(b.key))
+      : ensureSeed(),
+  );
+  const [correctAnswer, setCorrectAnswer] = useState(ext.correct_answer ?? '');
+  const [year, setYear] = useState<number | ''>(ext.year ?? '');
+  const [imageUrls, setImageUrls] = useState<string[]>(Array.isArray(ext.image_urls) ? ext.image_urls : []);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [savingState, setSavingState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  const currentSnapshot = useMemo(
+    () => JSON.stringify({ questionText, questionType, optionsList, correctAnswer, year, imageUrls }),
+    [questionText, questionType, optionsList, correctAnswer, year, imageUrls],
+  );
+  const lastSavedSnapshotRef = useRef(currentSnapshot);
+  const dirty = currentSnapshot !== lastSavedSnapshotRef.current;
+
+  // When the parent updates ext (e.g. after a server-side save round-trip),
+  // re-sync if we don't have unsaved local edits.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (dirty) return;
+    setQuestionText(ext.question_text);
+    setQuestionType(ext.question_type);
+    setOptionsList(
+      ext.options
+        ? Object.entries(ext.options)
+            .map(([k, v]) => ({ key: k, value: String(v) }))
+            .sort((a, b) => a.key.localeCompare(b.key))
+        : [],
+    );
+    setCorrectAnswer(ext.correct_answer ?? '');
+    setYear(ext.year ?? '');
+    setImageUrls(Array.isArray(ext.image_urls) ? ext.image_urls : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ext.id, ext.updated_at]);
+
+  useEffect(() => {
+    if (dirty && savingState === 'saved') setSavingState('idle');
+  }, [dirty, savingState]);
+
+  function ensureSeed() {
+    return [
+      { key: 'A', value: '' },
+      { key: 'B', value: '' },
+      { key: 'C', value: '' },
+      { key: 'D', value: '' },
+    ];
   }
-  function deleteOption(key: string) {
-    const next = { ...opts };
-    delete next[key];
-    onPatchLocal({ options: next });
-    if (ext.correct_answer === key) onPatchLocal({ correct_answer: null });
+
+  function buildOptionsObject(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const { key, value } of optionsList) {
+      const trimmed = value.trim();
+      if (trimmed) out[key] = trimmed;
+    }
+    return out;
+  }
+
+  async function save() {
+    if (!dirty) return;
+    setSavingState('saving');
+    const patch: Partial<Extraction> = {
+      question_text: questionText.trim(),
+      question_type: questionType,
+      options: questionType === 'mcq' ? buildOptionsObject() : null,
+      correct_answer: correctAnswer.trim() || null,
+      year: year === '' ? null : Number(year),
+      image_urls: imageUrls,
+    };
+    const ok = await onPersist(patch);
+    if (ok) {
+      lastSavedSnapshotRef.current = currentSnapshot;
+      setSavingState('saved');
+      setTimeout(() => setSavingState((s) => (s === 'saved' ? 'idle' : s)), 1500);
+    } else {
+      setSavingState('error');
+    }
+  }
+
+  async function toggleExcluded() {
+    const next = !ext.excluded;
+    await onPersist({ excluded: next });
+  }
+
+  function setOption(idx: number, key: 'key' | 'value', value: string) {
+    setOptionsList((arr) => arr.map((o, i) => (i === idx ? { ...o, [key]: value } : o)));
+  }
+
+  function addOption() {
+    if (optionsList.length >= OPTION_KEYS.length) return;
+    const used = new Set(optionsList.map((o) => o.key));
+    const nextKey = OPTION_KEYS.find((k) => !used.has(k)) ?? 'X';
+    setOptionsList((arr) => [...arr, { key: nextKey, value: '' }]);
+  }
+
+  function removeOption(idx: number) {
+    setOptionsList((arr) => {
+      const next = arr.filter((_, i) => i !== idx);
+      // If the removed option was the marked correct answer, clear it.
+      const removedKey = arr[idx]?.key;
+      if (removedKey && correctAnswer === removedKey) setCorrectAnswer('');
+      return next;
+    });
   }
 
   const willPublish = !ext.excluded && !ext.is_duplicate;
+  const showFigureNudge = !!ext.has_figure && imageUrls.length === 0;
 
   return (
-    <div className={`bg-white dark:bg-zinc-900 border rounded-xl p-5 ${
-      ext.excluded
-        ? 'border-zinc-200 dark:border-zinc-800 opacity-50'
-        : ext.is_duplicate
-        ? 'border-amber-200 dark:border-amber-900'
-        : 'border-zinc-200 dark:border-zinc-800'
-    }`}>
+    <div
+      className={`bg-white dark:bg-zinc-900 border rounded-xl p-5 ${
+        ext.excluded
+          ? 'border-zinc-200 dark:border-zinc-800 opacity-50'
+          : ext.is_duplicate
+          ? 'border-amber-200 dark:border-amber-900'
+          : 'border-zinc-200 dark:border-zinc-800'
+      }`}
+    >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">#{index}</span>
           <select
-            value={ext.question_type}
-            disabled={saving}
-            onChange={(e) => onSave({ question_type: e.target.value as 'mcq' | 'theory' })}
+            value={questionType}
+            onChange={(e) => setQuestionType(e.target.value as 'mcq' | 'theory')}
             className="text-xs px-2 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
           >
             <option value="mcq">MCQ</option>
@@ -288,31 +399,45 @@ function ExtractionCard({
             </span>
           )}
         </div>
-        <button
-          onClick={() => onSave({ excluded: !ext.excluded })}
-          className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
-        >
-          {ext.excluded ? 'Include' : 'Exclude'}
-        </button>
+        <div className="flex items-center gap-3 text-xs">
+          {savingState === 'saving' && <span className="text-zinc-400">Saving…</span>}
+          {savingState === 'saved' && <span className="text-green-600 dark:text-green-400 inline-flex items-center gap-1"><CheckIcon size={12} /> Saved</span>}
+          {savingState === 'error' && <span className="text-red-600 dark:text-red-400">Save failed</span>}
+          <button onClick={toggleExcluded} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
+            {ext.excluded ? 'Include' : 'Exclude'}
+          </button>
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="text-red-500 hover:text-red-700 inline-flex items-center gap-1"
+            title="Delete this draft permanently"
+          >
+            <TrashIcon size={12} /> Delete
+          </button>
+        </div>
       </div>
 
+      {showFigureNudge && (
+        <div className="mb-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-xs px-3 py-2 rounded-lg inline-flex items-center gap-2">
+          <AlertTriangleIcon size={12} />
+          This question references a figure or diagram. Attach an image so students can answer it.
+        </div>
+      )}
+
       <textarea
-        value={ext.question_text}
-        onChange={(e) => onPatchLocal({ question_text: e.target.value })}
-        onBlur={() => onSave({ question_text: ext.question_text })}
-        rows={Math.max(2, ext.question_text.split('\n').length)}
+        value={questionText}
+        onChange={(e) => setQuestionText(e.target.value)}
+        rows={Math.max(2, questionText.split('\n').length)}
         className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
       />
 
-      {ext.question_type === 'theory' && (
+      {questionType === 'theory' && (
         <div className="mt-3">
           <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
-            Suggested answer (optional — shown to students who attempt this question)
+            Reference answer (optional — used by the AI grader)
           </label>
           <textarea
-            value={ext.correct_answer ?? ''}
-            onChange={(e) => onPatchLocal({ correct_answer: e.target.value })}
-            onBlur={(e) => onSave({ correct_answer: e.target.value || null })}
+            value={correctAnswer}
+            onChange={(e) => setCorrectAnswer(e.target.value)}
             rows={4}
             placeholder="Write the model answer or marking guide. Leave blank if you only have the question."
             className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -320,70 +445,116 @@ function ExtractionCard({
         </div>
       )}
 
-      {ext.question_type === 'mcq' && (
+      {questionType === 'mcq' && (
         <div className="mt-3 space-y-2">
-          {optKeys.map((k) => (
-            (opts[k] !== undefined) ? (
-              <div key={k} className="flex items-center gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Options</span>
+            <button
+              type="button"
+              onClick={addOption}
+              disabled={optionsList.length >= OPTION_KEYS.length}
+              className="text-xs text-green-600 hover:text-green-700 inline-flex items-center gap-1 disabled:opacity-40"
+            >
+              <PlusIcon size={12} /> Add option
+            </button>
+          </div>
+          {optionsList.length === 0 && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">No options yet — click <span className="font-medium">Add option</span> to start.</p>
+          )}
+          {optionsList.map((o, idx) => {
+            const picked = correctAnswer === o.key;
+            return (
+              <div key={`${o.key}-${idx}`} className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => onSave({ correct_answer: ext.correct_answer === k ? null : k })}
-                  title="Mark as correct answer"
+                  onClick={() => setCorrectAnswer(picked ? '' : o.key)}
+                  title={picked ? 'Marked correct' : 'Mark as correct'}
                   className={`shrink-0 w-7 h-7 rounded-md text-xs font-semibold border ${
-                    ext.correct_answer === k
+                    picked
                       ? 'bg-green-600 border-green-600 text-white'
                       : 'border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
                   }`}
                 >
-                  {k}
+                  {picked ? <CheckIcon size={12} /> : o.key}
                 </button>
                 <input
-                  value={opts[k] ?? ''}
-                  onChange={(e) => setOption(k, e.target.value)}
-                  onBlur={() => onSave({ options: opts })}
+                  value={o.value}
+                  onChange={(e) => setOption(idx, 'value', e.target.value)}
+                  placeholder={`Option ${o.key}`}
                   className="flex-1 px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <button
                   type="button"
-                  onClick={() => { deleteOption(k); onSave({ options: { ...opts, [k]: undefined } as never }); }}
-                  className="text-xs text-zinc-400 hover:text-red-600"
+                  onClick={() => removeOption(idx)}
+                  className="text-zinc-400 hover:text-red-600"
+                  title="Remove option"
                 >
-                  Remove
+                  <TrashIcon size={14} />
                 </button>
               </div>
-            ) : null
-          ))}
-          {/* Add a missing option key */}
-          {optKeys.filter((k) => opts[k] === undefined).slice(0, 1).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => { setOption(k, ''); }}
-              className="text-xs text-green-600 hover:text-green-700 font-medium"
-            >
-              + Add option {k}
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      <div className="mt-3 flex items-center gap-3 text-xs">
+      <div className="mt-3">
+        <ImageUploader
+          value={imageUrls}
+          onChange={setImageUrls}
+          label="Attached images"
+          hint={ext.has_figure
+            ? 'This question references a figure — attach the image so students can answer.'
+            : 'Add a diagram or chart if needed.'}
+        />
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs">
         <label className="text-zinc-500 dark:text-zinc-400">
           Year{' '}
           <input
             type="number"
             min={1990}
             max={new Date().getFullYear()}
-            defaultValue={ext.year ?? ''}
-            onBlur={(e) => {
-              const v = e.target.value ? parseInt(e.target.value) : null;
-              if (v !== ext.year) onSave({ year: v });
-            }}
+            value={year}
+            onChange={(e) => setYear(e.target.value === '' ? '' : Number(e.target.value))}
             className="ml-1 w-24 px-2 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white"
           />
         </label>
-        {saving && <span className="text-zinc-400">Saving…</span>}
+        <button
+          type="button"
+          onClick={save}
+          disabled={savingState === 'saving' || !dirty}
+          className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 text-xs font-medium inline-flex items-center gap-1"
+        >
+          <SparklesIcon size={12} className="opacity-80" />
+          {savingState === 'saving' ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+        </button>
       </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-sm p-5">
+            <h3 className="font-semibold text-zinc-900 dark:text-white mb-1">Delete this draft?</h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+              This question will be removed from the review batch. It won&apos;t reach the question bank.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 px-3 py-2 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setConfirmDelete(false); onDelete(); }}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium py-2 rounded-lg"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

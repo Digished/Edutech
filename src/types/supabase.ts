@@ -135,6 +135,7 @@ export interface Database {
           status: 'pending' | 'approved' | 'rejected';
           is_deleted: boolean;
           content_hash: string | null;
+          image_urls: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -150,6 +151,7 @@ export interface Database {
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
           content_hash?: string | null;
+          image_urls?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -164,6 +166,7 @@ export interface Database {
           status?: 'pending' | 'approved' | 'rejected';
           is_deleted?: boolean;
           content_hash?: string | null;
+          image_urls?: Json | null;
           updated_at?: string;
         };
         Relationships: EmptyRelationships;
@@ -254,6 +257,8 @@ export interface Database {
           duplicate_of: string | null;
           excluded: boolean;
           confirmed: boolean;
+          image_urls: Json | null;
+          has_figure: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -271,6 +276,8 @@ export interface Database {
           duplicate_of?: string | null;
           excluded?: boolean;
           confirmed?: boolean;
+          image_urls?: Json | null;
+          has_figure?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -286,6 +293,8 @@ export interface Database {
           duplicate_of?: string | null;
           excluded?: boolean;
           confirmed?: boolean;
+          image_urls?: Json | null;
+          has_figure?: boolean;
           updated_at?: string;
         };
         Relationships: EmptyRelationships;

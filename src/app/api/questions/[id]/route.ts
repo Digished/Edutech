@@ -12,6 +12,7 @@ const updateSchema = z.object({
   options: z.record(z.string(), z.string()).nullable().optional(),
   correct_answer: z.string().nullable().optional(),
   year: z.number().int().min(1900).max(2100).nullable().optional(),
+  image_urls: z.array(z.string().url()).max(8).optional(),
 });
 
 export async function GET(

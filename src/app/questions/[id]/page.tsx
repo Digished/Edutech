@@ -11,6 +11,7 @@ interface Question {
   correct_answer: string | null;
   year: number | null;
   question_type: 'mcq' | 'theory';
+  image_urls: string[] | null;
   courses: { name: string; school: string; department: string; code: string | null } | null;
   question_analytics: { views_count: number }[];
 }
@@ -251,6 +252,23 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
           <p className="text-zinc-900 dark:text-white leading-relaxed font-medium whitespace-pre-line">
             {question.question_text}
           </p>
+
+          {Array.isArray(question.image_urls) && question.image_urls.length > 0 && (
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {question.image_urls.map((url, i) => (
+                <a
+                  key={`${url}-${i}`}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 hover:opacity-90"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="w-full h-auto max-h-72 object-contain" />
+                </a>
+              ))}
+            </div>
+          )}
 
           {/* Answer area */}
           <div className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-800">

@@ -233,9 +233,9 @@ export default function DashboardPage() {
 
         {/* Status strip */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-          {/* Subscription / access tile */}
+          {/* Subscription / access tile — always points at the subscription page */}
           <Link
-            href={isContributor ? '/dashboard/contributions' : '/dashboard/subscription'}
+            href="/dashboard/subscription"
             className="group bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 flex items-center justify-between hover:border-green-300 transition-colors"
           >
             <div>

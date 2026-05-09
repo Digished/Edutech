@@ -51,6 +51,7 @@ export interface Question {
   status: ModerationStatus;
   is_deleted: boolean;
   content_hash: string | null;
+  image_urls: string[] | null;
   created_at: string;
   updated_at: string;
 }

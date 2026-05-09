@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SearchSelect from '@/components/SearchSelect';
+import ImageUploader from '@/components/ImageUploader';
 import {
   ArrowLeftIcon, CheckIcon, PenIcon, PlusIcon, SparklesIcon, TrashIcon, XIcon,
 } from '@/components/icons';
@@ -39,6 +40,8 @@ export default function NewQuestionPage() {
   );
   const [correctAnswer, setCorrectAnswer] = useState('');
   const [referenceAnswer, setReferenceAnswer] = useState('');
+
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
 
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
@@ -143,6 +146,7 @@ export default function NewQuestionPage() {
         question_text: questionText.trim(),
         question_type: questionType,
         year: year === '' ? null : Number(year),
+        image_urls: imageUrls,
       };
       if (questionType === 'mcq') {
         payload.options = opts;
@@ -196,7 +200,7 @@ export default function NewQuestionPage() {
 
         {submitSuccess && (
           <div className="mb-5 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm px-4 py-3 rounded-lg">
-            Question submitted for review. Redirecting…
+            Question added to the bank. Redirecting…
           </div>
         )}
 
@@ -364,6 +368,13 @@ export default function NewQuestionPage() {
             )}
           </div>
 
+          <ImageUploader
+            value={imageUrls}
+            onChange={setImageUrls}
+            label="Images (optional)"
+            hint="Attach diagrams, charts or any image the question refers to. Up to 8 images, 5MB each."
+          />
+
           <div>
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Year (optional)</label>
             <input
@@ -380,7 +391,7 @@ export default function NewQuestionPage() {
             disabled={submitting}
             className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-2.5 rounded-lg text-sm"
           >
-            {submitting ? 'Submitting…' : 'Submit for review'}
+            {submitting ? 'Adding…' : 'Add to question bank'}
           </button>
         </form>
       </div>

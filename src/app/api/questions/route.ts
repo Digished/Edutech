@@ -20,6 +20,7 @@ const schema = z.object({
     .optional(),
   correct_answer: z.string().nullable().optional(),
   year: z.number().int().min(1900).max(2100).nullable().optional(),
+  image_urls: z.array(z.string().url()).max(8).optional(),
 });
 
 const CONTRIBUTOR_PROMOTION_THRESHOLD = 100;
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return badRequest(parsed.error.issues[0].message);
 
-    const { course_id, question_text, question_type, options, correct_answer, year } = parsed.data;
+    const { course_id, question_text, question_type, options, correct_answer, year, image_urls } = parsed.data;
     if (question_type === 'mcq' && (!options || Object.keys(options).length < 2)) {
       return badRequest('Add at least two options for an MCQ');
     }
@@ -105,7 +106,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create question (pending moderation)
+    // Create question. Manual single-question entries from the contributor UI
+    // bypass moderation so the contributor immediately sees them on the bank.
     const { data: question, error: qError } = await adminSupabase
       .from('questions')
       .insert({
@@ -116,8 +118,9 @@ export async function POST(req: NextRequest) {
         correct_answer: correct_answer ?? null,
         year: year ?? null,
         source_type: 'manual',
-        status: 'pending',
+        status: 'approved',
         content_hash,
+        image_urls: image_urls ?? [],
       })
       .select()
       .single();
@@ -155,7 +158,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return created(question, 'Question submitted for review');
+    return created(question, 'Question added to the bank');
   } catch {
     return serverError();
   }

@@ -13,6 +13,9 @@ export interface ExtractedQuestion {
   options: QuestionOptions | null;
   correct_answer: string | null;
   year: number | null;
+  // True when the question references a figure / diagram / chart that the
+  // contributor will need to attach as an image after extraction.
+  has_figure: boolean;
 }
 
 export interface ExtractionResult {
@@ -32,9 +35,10 @@ Return a JSON object of the form:
 Each item must have:
 - question_text: string (full question, include sub-parts joined with newlines for theory). Do NOT include the option list inside question_text — the options must live only in the options field.
 - question_type: "mcq" | "theory"
-- options: object or null — REQUIRED for mcq. Capture every printed option, keyed exactly by its label (usually A, B, C, D — sometimes E, or i/ii/iii). The value is the option text only, with the leading label, parentheses or punctuation stripped (e.g. "A. 5kg" -> "5kg"). MUST be null for theory.
+- options: object or null — REQUIRED for mcq. Capture EVERY printed option, keyed exactly by its label (usually A, B, C, D — sometimes E, or i/ii/iii). The value is the option text only, with the leading label, parentheses or punctuation stripped (e.g. "A. 5kg" -> "5kg"). NEVER leave options empty or null for an mcq — if you cannot read the options, mark question_type as "theory" instead. MUST be null for theory.
 - correct_answer: string or null. Use the EXACT option label (e.g. "A", "B", "C") for MCQs. For theory, a short reference answer if explicitly given.
 - year: number or null (academic year if visible on the paper)
+- has_figure: boolean — true if the question text refers to a figure, diagram, chart, table, image, graph, "shown below", "above", "Fig. 1", etc. that a student would need to see to answer. False otherwise.
 
 Answer key handling — VERY IMPORTANT:
 - Many Nigerian past papers print an answer key at the end of the paper, often labelled "ANSWERS", "ANSWER KEY", "SOLUTIONS", "MARKING SCHEME" or similar.
@@ -97,17 +101,33 @@ function parseQuestions(content: string | null | undefined, finishReason?: strin
       .map((q) => {
         const text = String(q.question_text ?? '').trim();
         if (!text) return null;
-        const type: QuestionType = q.question_type === 'theory' ? 'theory' : 'mcq';
-        const options =
+        let type: QuestionType = q.question_type === 'theory' ? 'theory' : 'mcq';
+        let options =
           type === 'mcq' && q.options && typeof q.options === 'object'
             ? (q.options as QuestionOptions)
             : null;
+        // Drop blank option values and re-evaluate. An MCQ with no real options
+        // is more useful as a theory question than as a broken MCQ.
+        if (options) {
+          const cleaned: QuestionOptions = {};
+          for (const [k, v] of Object.entries(options)) {
+            const value = String(v ?? '').trim();
+            if (value) cleaned[k] = value;
+          }
+          options = Object.keys(cleaned).length >= 2 ? cleaned : null;
+          if (!options && type === 'mcq') type = 'theory';
+        }
+        const figureHint =
+          /\b(figure|fig\.|diagram|chart|graph|table|shown below|shown above|the diagram|the figure|illustrated|the graph|the chart)\b/i.test(text);
+        const has_figure =
+          typeof q.has_figure === 'boolean' ? q.has_figure : figureHint;
         return {
           question_text: text,
           question_type: type,
           options,
           correct_answer: q.correct_answer ? String(q.correct_answer) : null,
           year: typeof q.year === 'number' ? q.year : q.year ? Number(q.year) || null : null,
+          has_figure,
         };
       })
       .filter((q): q is ExtractedQuestion => q !== null);

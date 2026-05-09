@@ -24,6 +24,7 @@ interface Question {
   correct_answer: string | null;
   year: number | null;
   question_type: 'mcq' | 'theory';
+  image_urls: string[] | null;
   courses: Course;
   question_analytics: { views_count: number }[] | { views_count: number } | null;
 }
@@ -247,6 +248,19 @@ export default function QuestionsPage() {
                 <p className="text-zinc-900 dark:text-white text-sm leading-relaxed font-medium whitespace-pre-line">
                   {q.question_text}
                 </p>
+                {Array.isArray(q.image_urls) && q.image_urls.length > 0 && (
+                  <div className="mt-3 flex gap-2 flex-wrap">
+                    {q.image_urls.slice(0, 3).map((url, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={`${url}-${i}`}
+                        src={url}
+                        alt=""
+                        className="h-24 w-auto max-w-full rounded-lg border border-zinc-200 dark:border-zinc-800 object-cover"
+                      />
+                    ))}
+                  </div>
+                )}
                 {q.options && (
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     {Object.entries(q.options).map(([key, val]) => (

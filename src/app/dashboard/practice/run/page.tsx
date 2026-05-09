@@ -18,6 +18,7 @@ interface Question {
   options: Record<string, string> | null;
   correct_answer: string | null;
   question_type: 'mcq' | 'theory';
+  image_urls: string[] | null;
   courses: { name: string; school: string } | null;
 }
 
@@ -387,6 +388,20 @@ function PracticeRunInner() {
               <p className="text-zinc-900 dark:text-white leading-relaxed font-medium whitespace-pre-line">
                 {question.question_text}
               </p>
+
+              {Array.isArray(question.image_urls) && question.image_urls.length > 0 && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {question.image_urls.map((url, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={`${url}-${i}`}
+                      src={url}
+                      alt=""
+                      className="w-full h-auto max-h-64 object-contain rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800"
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="mt-5">
                 {question.question_type === 'mcq' && question.options ? (
