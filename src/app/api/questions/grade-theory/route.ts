@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const { data: question } = await supabase
       .from('questions')
-      .select('id, question_text, question_type, correct_answer, status, is_deleted, courses(faculty_id)')
+      .select('id, question_text, question_type, correct_answer, status, is_deleted, group_id, courses(faculty_id)')
       .eq('id', parsed.data.question_id)
       .single();
 
@@ -43,12 +43,23 @@ export async function POST(req: NextRequest) {
       return forbidden('Subscribe to this faculty to unlock the question.');
     }
 
-    // gradeTheoryAnswer accepts a null reference and grades from the model's
-    // own knowledge — we always call it.
+    // If the question is a sub-part of a multi-part question, fetch the shared
+    // stem so the grader can interpret the question in its full context.
+    let stem: string | null = null;
+    if (question.group_id) {
+      const { data: group } = await supabase
+        .from('question_groups')
+        .select('stem')
+        .eq('id', question.group_id)
+        .single();
+      stem = group?.stem ?? null;
+    }
+
     const grade = await gradeTheoryAnswer(
       question.question_text,
       parsed.data.answer,
       question.correct_answer,
+      stem,
     );
     return ok(grade);
   } catch (err) {

@@ -23,6 +23,10 @@ interface Extraction {
   confirmed: boolean;
   image_urls: string[] | null;
   has_figure: boolean | null;
+  group_key: string | null;
+  stem: string | null;
+  part_label: string | null;
+  part_position: number | null;
   updated_at?: string | null;
 }
 
@@ -170,15 +174,31 @@ export default function ReviewExtractionsPage({
             </div>
 
             <div className="space-y-3">
-              {items.map((e, idx) => (
-                <ExtractionCard
-                  key={e.id}
-                  index={idx + 1}
-                  ext={e}
-                  onPersist={(p) => persist(e.id, p)}
-                  onDelete={() => deleteExt(e.id)}
-                />
-              ))}
+              {items.map((e, idx) => {
+                const prev = idx > 0 ? items[idx - 1] : null;
+                // Show the shared stem once, above the first part of each group.
+                const startsGroup = !!e.group_key && (!prev || prev.group_key !== e.group_key);
+                return (
+                  <div key={e.id}>
+                    {startsGroup && e.stem && (
+                      <div className="rounded-t-xl border border-b-0 border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-4 py-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400 mb-1">
+                          Shared heading · question {e.group_key}
+                        </div>
+                        <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+                          {e.stem}
+                        </p>
+                      </div>
+                    )}
+                    <ExtractionCard
+                      index={idx + 1}
+                      ext={e}
+                      onPersist={(p) => persist(e.id, p)}
+                      onDelete={() => deleteExt(e.id)}
+                    />
+                  </div>
+                );
+              })}
             </div>
 
             <div className="mt-6 flex items-center justify-end gap-3">
@@ -370,6 +390,11 @@ function ExtractionCard({ index, ext, onPersist, onDelete }: CardProps) {
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">#{index}</span>
+          {ext.part_label && (
+            <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+              Part {ext.part_label}
+            </span>
+          )}
           <select
             value={questionType}
             onChange={(e) => setQuestionType(e.target.value as 'mcq' | 'theory')}

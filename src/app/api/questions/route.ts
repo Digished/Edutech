@@ -12,9 +12,16 @@ import { getPagination } from '@/lib/utils/pagination';
 import { hashQuestionText } from '@/lib/utils/hash';
 import { detectDuplicates, findDuplicateMatch } from '@/lib/dedup/similarity';
 
+const partSchema = z.object({
+  part_label: z.string().trim().max(8).optional(),
+  question_text: z.string().min(2),
+  correct_answer: z.string().nullable().optional(),
+  image_urls: z.array(z.string().url()).max(8).optional(),
+});
+
 const schema = z.object({
   course_id: z.string().uuid(),
-  question_text: z.string().min(5),
+  question_text: z.string().min(5).optional(),
   question_type: z.enum(['mcq', 'theory']).default('mcq'),
   options: z
     .record(z.string(), z.string())
@@ -25,6 +32,10 @@ const schema = z.object({
   level: z.union([z.literal(100), z.literal(200), z.literal(300), z.literal(400), z.literal(500), z.literal(600)]).nullable().optional(),
   semester: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
   image_urls: z.array(z.string().url()).max(8).optional(),
+  // Multi-part theory: shared stem with one or more sub-parts.
+  stem: z.string().min(5).optional(),
+  stem_image_urls: z.array(z.string().url()).max(8).optional(),
+  parts: z.array(partSchema).min(1).max(20).optional(),
 });
 
 const CONTRIBUTOR_PROMOTION_THRESHOLD = 100;
@@ -138,30 +149,104 @@ export async function POST(req: NextRequest) {
     const parsed = schema.safeParse(body);
     if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
-    const { course_id, question_text, question_type, options, correct_answer, year, level, semester, image_urls } = parsed.data;
+    const { course_id, question_text, question_type, options, correct_answer, year, level, semester, image_urls, stem, stem_image_urls, parts } = parsed.data;
+
+    const isMultiPart = !!(stem && parts && parts.length > 0);
+    if (!isMultiPart && (!question_text || question_text.trim().length < 5)) {
+      return badRequest('Write the question');
+    }
+    if (isMultiPart && question_type !== 'theory') {
+      return badRequest('Multi-part questions must be theory questions');
+    }
     if (question_type === 'mcq' && (!options || Object.keys(options).length < 2)) {
       return badRequest('Add at least two options for an MCQ');
     }
 
-    const content_hash = hashQuestionText(question_text);
-
     const adminSupabase = createAdminClient();
 
-    // Reject near-duplicates (≥85% trigram similarity within the same course).
-    const dup = await findDuplicateMatch(question_text, course_id);
+    // ---------- multi-part theory branch ----------
+    if (isMultiPart) {
+      // Reject duplicate sub-parts within the same course.
+      for (const p of parts!) {
+        const dup = await findDuplicateMatch(p.question_text, course_id);
+        if (dup) {
+          return badRequest(
+            `Part "${p.part_label ?? p.question_text.slice(0, 40)}" looks like a near-duplicate of an existing question (${Math.round(dup.score * 100)}% similar).`,
+          );
+        }
+      }
+
+      const { data: group, error: gErr } = await adminSupabase
+        .from('question_groups')
+        .insert({
+          course_id,
+          stem: stem!,
+          stem_image_urls: stem_image_urls ?? [],
+          year: year ?? null,
+          level: level ?? null,
+          semester: semester ?? null,
+          source_type: 'manual',
+          status: 'approved',
+        })
+        .select('id')
+        .single();
+      if (gErr || !group) return serverError(gErr?.message ?? 'Could not create question group');
+
+      const inserted: { id: string }[] = [];
+      for (let i = 0; i < parts!.length; i++) {
+        const p = parts![i];
+        const partHash = hashQuestionText(p.question_text);
+        const { data: q, error: qErr } = await adminSupabase
+          .from('questions')
+          .insert({
+            course_id,
+            group_id: group.id,
+            part_label: p.part_label ?? null,
+            position: i + 1,
+            question_text: p.question_text,
+            question_type: 'theory',
+            options: null,
+            correct_answer: p.correct_answer ?? null,
+            year: year ?? null,
+            level: level ?? null,
+            semester: semester ?? null,
+            source_type: 'manual',
+            status: 'approved',
+            content_hash: partHash,
+            image_urls: p.image_urls ?? [],
+          })
+          .select('id, question_text, course_id')
+          .single();
+        if (qErr || !q) return serverError(qErr?.message ?? 'Could not create question part');
+
+        await adminSupabase.from('question_contributions').insert({
+          question_id: q.id,
+          user_id: profile.id,
+          contribution_type: 'upload',
+          contribution_weight: 1.0,
+        });
+        detectDuplicates(q.id, p.question_text, course_id).catch(() => null);
+        inserted.push({ id: q.id });
+      }
+
+      return created({ group_id: group.id, question_ids: inserted.map((x) => x.id) }, `Added ${inserted.length} parts to the bank`);
+    }
+
+    // ---------- standalone branch ----------
+    const content_hash = hashQuestionText(question_text!);
+
+    const dup = await findDuplicateMatch(question_text!, course_id);
     if (dup) {
       return badRequest(
         `This question looks like a near-duplicate of an existing one (${Math.round(dup.score * 100)}% similar). Please edit the existing question instead.`,
       );
     }
 
-    // Create question. Manual single-question entries from the contributor UI
-    // bypass moderation so the contributor immediately sees them on the bank.
     const { data: question, error: qError } = await adminSupabase
       .from('questions')
       .insert({
         course_id,
-        question_text,
+        question_text: question_text!,
         question_type,
         options: question_type === 'mcq' ? options ?? null : null,
         correct_answer: correct_answer ?? null,
@@ -178,7 +263,6 @@ export async function POST(req: NextRequest) {
 
     if (qError) return serverError(qError.message);
 
-    // Log contribution
     await adminSupabase.from('question_contributions').insert({
       question_id: question.id,
       user_id: profile.id,
@@ -186,8 +270,7 @@ export async function POST(req: NextRequest) {
       contribution_weight: 1.0,
     });
 
-    // Async duplicate detection (don't block response)
-    detectDuplicates(question.id, question_text, course_id).catch(() => null);
+    detectDuplicates(question.id, question_text!, course_id).catch(() => null);
 
     // Promote a student to contributor only once they've crossed the threshold
     // of approved upload/extraction contributions.
