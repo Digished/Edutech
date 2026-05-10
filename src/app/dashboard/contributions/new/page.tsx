@@ -61,6 +61,28 @@ export default function NewQuestionPage() {
 
   const [imageUrls, setImageUrls] = useState<string[]>([]);
 
+  // Multi-part theory state — only used when questionType === 'theory' AND
+  // the contributor toggles "This question has multiple sub-parts".
+  const [multiPart, setMultiPart] = useState(false);
+  const [stem, setStem] = useState('');
+  const [stemImageUrls, setStemImageUrls] = useState<string[]>([]);
+  type Part = { part_label: string; question_text: string; correct_answer: string };
+  const [parts, setParts] = useState<Part[]>([
+    { part_label: 'a', question_text: '', correct_answer: '' },
+    { part_label: 'b', question_text: '', correct_answer: '' },
+  ]);
+  function updatePart(i: number, patch: Partial<Part>) {
+    setParts((arr) => arr.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+  function addPart() {
+    const labels = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const next = labels[parts.length] ?? String(parts.length + 1);
+    setParts((arr) => [...arr, { part_label: next, question_text: '', correct_answer: '' }]);
+  }
+  function removePart(i: number) {
+    setParts((arr) => (arr.length <= 1 ? arr : arr.filter((_, idx) => idx !== i)));
+  }
+
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
   const [suggestError, setSuggestError] = useState('');
@@ -196,14 +218,22 @@ export default function NewQuestionPage() {
     e.preventDefault();
     setSubmitError('');
     if (!courseId) { setSubmitError('Pick a course'); return; }
-    if (!questionText.trim()) { setSubmitError('Write the question'); return; }
+
+    const isMulti = questionType === 'theory' && multiPart;
+    if (isMulti) {
+      if (!stem.trim()) { setSubmitError('Write the shared heading / stem'); return; }
+      const cleanParts = parts.filter((p) => p.question_text.trim());
+      if (cleanParts.length < 1) { setSubmitError('Add at least one sub-part'); return; }
+    } else {
+      if (!questionText.trim()) { setSubmitError('Write the question'); return; }
+    }
 
     const opts = buildOptionsObject();
-    if (questionType === 'mcq' && Object.keys(opts).length < 2) {
+    if (!isMulti && questionType === 'mcq' && Object.keys(opts).length < 2) {
       setSubmitError('Add at least two options');
       return;
     }
-    if (questionType === 'mcq' && correctAnswer && !opts[correctAnswer]) {
+    if (!isMulti && questionType === 'mcq' && correctAnswer && !opts[correctAnswer]) {
       setSubmitError('Correct answer must match one of your options');
       return;
     }
@@ -212,18 +242,30 @@ export default function NewQuestionPage() {
     try {
       const payload: Record<string, unknown> = {
         course_id: courseId,
-        question_text: questionText.trim(),
         question_type: questionType,
         year: year === '' ? null : Number(year),
         level: level === '' ? null : Number(level),
         semester: semester === '' ? null : Number(semester),
-        image_urls: imageUrls,
       };
-      if (questionType === 'mcq') {
-        payload.options = opts;
-        if (correctAnswer) payload.correct_answer = correctAnswer;
+      if (isMulti) {
+        payload.stem = stem.trim();
+        payload.stem_image_urls = stemImageUrls;
+        payload.parts = parts
+          .filter((p) => p.question_text.trim())
+          .map((p) => ({
+            part_label: p.part_label.trim() || undefined,
+            question_text: p.question_text.trim(),
+            correct_answer: p.correct_answer.trim() || null,
+          }));
       } else {
-        if (referenceAnswer.trim()) payload.correct_answer = referenceAnswer.trim();
+        payload.question_text = questionText.trim();
+        payload.image_urls = imageUrls;
+        if (questionType === 'mcq') {
+          payload.options = opts;
+          if (correctAnswer) payload.correct_answer = correctAnswer;
+        } else {
+          if (referenceAnswer.trim()) payload.correct_answer = referenceAnswer.trim();
+        }
       }
       const res = await fetch('/api/questions', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -384,19 +426,123 @@ export default function NewQuestionPage() {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Question text</label>
-            <textarea
-              required
-              rows={4}
-              value={questionText}
-              onChange={(e) => setQuestionText(e.target.value)}
-              placeholder="Type or paste the full question…"
-              className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
+          {questionType === 'theory' && (
+            <label className="flex items-start gap-2 text-xs text-zinc-700 dark:text-zinc-300 select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={multiPart}
+                onChange={(e) => setMultiPart(e.target.checked)}
+                className="mt-0.5 accent-green-600"
+              />
+              <span>
+                <span className="font-medium">This question has multiple sub-parts</span>
+                <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  e.g. a heading like &quot;Given the model ABC&quot; followed by (a), (b), (c). Each sub-part is graded
+                  on its own but shares the same heading.
+                </span>
+              </span>
+            </label>
+          )}
 
-          {questionType === 'mcq' && (
+          {!multiPart && (
+            <div>
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Question text</label>
+              <textarea
+                required
+                rows={4}
+                value={questionText}
+                onChange={(e) => setQuestionText(e.target.value)}
+                placeholder="Type or paste the full question…"
+                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          )}
+
+          {multiPart && questionType === 'theory' && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Shared heading / stem <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={stem}
+                  onChange={(e) => setStem(e.target.value)}
+                  placeholder="e.g. Given the model ABC..."
+                  className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Shown once above every sub-part. Don&apos;t repeat it inside each part.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Heading images <span className="text-zinc-400 font-normal">(optional, e.g. a diagram referenced by all parts)</span>
+                </label>
+                <ImageUploader
+                  value={stemImageUrls}
+                  onChange={setStemImageUrls}
+                  hint="Up to 8 images, 5MB each."
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Sub-parts</label>
+                  <button
+                    type="button"
+                    onClick={addPart}
+                    disabled={parts.length >= 8}
+                    className="text-xs text-green-600 hover:text-green-700 inline-flex items-center gap-1 disabled:opacity-40"
+                  >
+                    <PlusIcon size={12} /> Add part
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {parts.map((p, i) => (
+                    <div key={i} className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-3 bg-zinc-50/40 dark:bg-zinc-900/40">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input
+                          value={p.part_label}
+                          onChange={(e) => updatePart(i, { part_label: e.target.value })}
+                          placeholder="a"
+                          className="w-14 px-2 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm font-medium text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">part label</span>
+                        {parts.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePart(i)}
+                            className="ml-auto text-zinc-400 hover:text-red-500"
+                            title="Remove part"
+                          >
+                            <TrashIcon size={14} />
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        rows={2}
+                        value={p.question_text}
+                        onChange={(e) => updatePart(i, { question_text: e.target.value })}
+                        placeholder="Sub-part question, e.g. Define AB."
+                        className="w-full px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                      <textarea
+                        rows={2}
+                        value={p.correct_answer}
+                        onChange={(e) => updatePart(i, { correct_answer: e.target.value })}
+                        placeholder="Reference answer (optional, used by AI grader)"
+                        className="w-full mt-2 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {!multiPart && questionType === 'mcq' && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Options</label>
@@ -445,7 +591,7 @@ export default function NewQuestionPage() {
             </div>
           )}
 
-          {questionType === 'theory' && (
+          {!multiPart && questionType === 'theory' && (
             <div>
               <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
                 Reference answer <span className="text-zinc-400 font-normal">(optional, used by AI grader)</span>
@@ -460,7 +606,8 @@ export default function NewQuestionPage() {
             </div>
           )}
 
-          {/* AI suggest answer */}
+          {/* AI suggest answer — single-question mode only. */}
+          {!multiPart && (
           <div className="bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 rounded-xl p-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
@@ -509,13 +656,16 @@ export default function NewQuestionPage() {
               </div>
             )}
           </div>
+          )}
 
-          <ImageUploader
-            value={imageUrls}
-            onChange={setImageUrls}
-            label="Images (optional)"
-            hint="Attach diagrams, charts or any image the question refers to. Up to 8 images, 5MB each."
-          />
+          {!multiPart && (
+            <ImageUploader
+              value={imageUrls}
+              onChange={setImageUrls}
+              label="Images (optional)"
+              hint="Attach diagrams, charts or any image the question refers to. Up to 8 images, 5MB each."
+            />
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>

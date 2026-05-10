@@ -16,6 +16,14 @@ export interface ExtractedQuestion {
   // True when the question references a figure / diagram / chart that the
   // contributor will need to attach as an image after extraction.
   has_figure: boolean;
+  // Multi-part grouping. Sub-parts that share a stem must share the same
+  // `group_key` (any string — typically the parent question number "5"). A
+  // standalone question has group_key = null. `stem` is required on at least
+  // one row per group; subsequent rows may repeat or omit it.
+  group_key: string | null;
+  stem: string | null;
+  part_label: string | null;
+  part_position: number | null;
 }
 
 export interface ExtractionResult {
@@ -27,18 +35,40 @@ const EXTRACTION_SYSTEM_PROMPT = `You are an expert at extracting exam questions
 
 Two question types may be present and you MUST extract BOTH:
 - "mcq" — multiple-choice questions that present options (A, B, C, D, …). Capture EVERY option that appears under the question.
-- "theory" — open-ended / essay / explanation / "discuss" / "describe" / "prove" / "calculate" / "show that" / "list and explain" questions that have NO options. Capture the full question prompt including any sub-parts (a), (b), (c).
+- "theory" — open-ended / essay / explanation / "discuss" / "describe" / "prove" / "calculate" / "show that" / "list and explain" questions that have NO options.
+
+MULTI-PART THEORY QUESTIONS — VERY IMPORTANT:
+Many theory questions have a shared stem (a heading, a model, a passage, a diagram description) followed by several numbered or lettered sub-parts. Example:
+
+  5. Given the model ABC ...
+     (a) Define AB.
+     (b) What is the coefficient of ABC?
+     (c) Sketch the graph.
+
+You MUST split this into ONE row PER sub-part, all sharing the same stem.
+- Emit one row per sub-part.
+- Each row carries the SAME "group_key" (use the parent number, e.g. "5").
+- "stem" carries the shared heading text ("Given the model ABC ...") on every row in the group.
+- "part_label" is the sub-part marker exactly as printed ("a", "b", "i", "1").
+- "part_position" is the 1-based order of the sub-part within the group.
+- "question_text" is ONLY the sub-part text ("Define AB."), NOT the stem.
+
+Standalone questions (no shared stem) MUST set group_key, stem, part_label and part_position to null.
 
 Return a JSON object of the form:
 { "questions": [ { ... }, { ... } ] }
 
 Each item must have:
-- question_text: string (full question, include sub-parts joined with newlines for theory). Do NOT include the option list inside question_text — the options must live only in the options field.
+- question_text: string (the sub-part text only for grouped rows; the full question for standalone). Do NOT include the option list inside question_text — the options must live only in the options field. Do NOT repeat the stem in question_text — that goes in the "stem" field.
 - question_type: "mcq" | "theory"
 - options: object or null — REQUIRED for mcq. Capture EVERY printed option, keyed exactly by its label (usually A, B, C, D — sometimes E, or i/ii/iii). The value is the option text only, with the leading label, parentheses or punctuation stripped (e.g. "A. 5kg" -> "5kg"). NEVER leave options empty or null for an mcq — if you cannot read the options, mark question_type as "theory" instead. MUST be null for theory.
-- correct_answer: string or null. Use the EXACT option label (e.g. "A", "B", "C") for MCQs. For theory, a short reference answer if explicitly given.
+- correct_answer: string or null. Use the EXACT option label (e.g. "A", "B", "C") for MCQs. For theory, a short reference answer if explicitly given (per sub-part).
 - year: number or null (academic year if visible on the paper)
-- has_figure: boolean — true if the question text refers to a figure, diagram, chart, table, image, graph, "shown below", "above", "Fig. 1", etc. that a student would need to see to answer. False otherwise.
+- has_figure: boolean — true if the question text or stem refers to a figure, diagram, chart, table, image, graph, "shown below", "above", "Fig. 1", etc. that a student would need to see to answer. False otherwise.
+- group_key: string or null — same value for every sub-part of a multi-part question; null for standalone.
+- stem: string or null — shared heading text for multi-part rows; null for standalone.
+- part_label: string or null — sub-part marker as printed; null for standalone.
+- part_position: integer or null — 1-based order within the group; null for standalone.
 
 Answer key handling — VERY IMPORTANT:
 - Many Nigerian past papers print an answer key at the end of the paper, often labelled "ANSWERS", "ANSWER KEY", "SOLUTIONS", "MARKING SCHEME" or similar.
@@ -121,6 +151,26 @@ function parseQuestions(content: string | null | undefined, finishReason?: strin
           /\b(figure|fig\.|diagram|chart|graph|table|shown below|shown above|the diagram|the figure|illustrated|the graph|the chart)\b/i.test(text);
         const has_figure =
           typeof q.has_figure === 'boolean' ? q.has_figure : figureHint;
+        const groupKeyRaw = q.group_key;
+        const group_key =
+          groupKeyRaw === null || groupKeyRaw === undefined || groupKeyRaw === ''
+            ? null
+            : String(groupKeyRaw).trim() || null;
+        const stemRaw = q.stem;
+        const stem =
+          stemRaw === null || stemRaw === undefined ? null : String(stemRaw).trim() || null;
+        const partLabelRaw = q.part_label;
+        const part_label =
+          partLabelRaw === null || partLabelRaw === undefined
+            ? null
+            : String(partLabelRaw).trim() || null;
+        const partPosRaw = q.part_position;
+        const part_position =
+          typeof partPosRaw === 'number'
+            ? partPosRaw
+            : partPosRaw
+            ? Number(partPosRaw) || null
+            : null;
         return {
           question_text: text,
           question_type: type,
@@ -128,6 +178,12 @@ function parseQuestions(content: string | null | undefined, finishReason?: strin
           correct_answer: q.correct_answer ? String(q.correct_answer) : null,
           year: typeof q.year === 'number' ? q.year : q.year ? Number(q.year) || null : null,
           has_figure,
+          // Only honour grouping when the model produced both a key and a stem;
+          // otherwise treat as standalone to avoid orphaned sub-parts.
+          group_key: group_key && stem ? group_key : null,
+          stem: group_key && stem ? stem : null,
+          part_label: group_key && stem ? part_label : null,
+          part_position: group_key && stem ? part_position : null,
         };
       })
       .filter((q): q is ExtractedQuestion => q !== null);

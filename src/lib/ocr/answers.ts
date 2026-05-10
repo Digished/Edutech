@@ -167,6 +167,7 @@ export async function gradeTheoryAnswer(
   questionText: string,
   studentAnswer: string,
   referenceAnswer: string | null,
+  stem: string | null = null,
 ): Promise<TheoryGrade> {
   if (!studentAnswer.trim()) {
     return { score: 0, is_correct: false, feedback: 'No answer was provided.' };
@@ -174,10 +175,15 @@ export async function gradeTheoryAnswer(
 
   const openai = client();
   const userMessage = [
+    stem?.trim()
+      ? `Shared context (applies to the question, do not grade this part):\n${stem.trim()}`
+      : null,
     `Question: ${questionText}`,
     referenceAnswer ? `Reference answer: ${referenceAnswer}` : 'No reference answer provided — judge from your own knowledge.',
     `Student answer: ${studentAnswer}`,
-  ].join('\n\n');
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',

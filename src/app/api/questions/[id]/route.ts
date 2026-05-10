@@ -42,8 +42,29 @@ export async function GET(
       return forbidden('Subscribe to this faculty to unlock the question.');
     }
 
+    let group: { id: string; stem: string; stem_image_urls: unknown } | null = null;
+    let group_siblings: { id: string; part_label: string | null; position: number | null }[] = [];
+    const groupId = (data as unknown as { group_id: string | null }).group_id;
+    if (groupId) {
+      const [{ data: g }, { data: sibs }] = await Promise.all([
+        supabase
+          .from('question_groups')
+          .select('id, stem, stem_image_urls')
+          .eq('id', groupId)
+          .single(),
+        supabase
+          .from('questions')
+          .select('id, part_label, position')
+          .eq('group_id', groupId)
+          .eq('is_deleted', false)
+          .order('position', { ascending: true }),
+      ]);
+      group = g ?? null;
+      group_siblings = sibs ?? [];
+    }
+
     await createAdminClient().rpc('increment_question_views', { p_question_id: id });
-    return ok(data);
+    return ok({ ...data, group, group_siblings });
   } catch {
     return serverError();
   }

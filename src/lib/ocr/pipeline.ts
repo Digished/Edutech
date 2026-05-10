@@ -125,6 +125,10 @@ export async function processUpload(uploadId: string): Promise<void> {
       is_duplicate: boolean;
       duplicate_of: string | null;
       has_figure: boolean;
+      group_key: string | null;
+      stem: string | null;
+      part_label: string | null;
+      part_position: number | null;
     }[] = [];
 
     for (let i = 0; i < extractionResult.questions.length; i++) {
@@ -147,6 +151,10 @@ export async function processUpload(uploadId: string): Promise<void> {
         is_duplicate: dupOf !== null,
         duplicate_of: dupOf,
         has_figure: !!eq.has_figure,
+        group_key: eq.group_key ?? null,
+        stem: eq.stem ?? null,
+        part_label: eq.part_label ?? null,
+        part_position: eq.part_position ?? null,
       });
 
       const pct = 70 + Math.floor((25 * (i + 1)) / total);

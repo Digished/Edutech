@@ -44,24 +44,65 @@ export async function POST(
     let skipped = 0;
     const publishedIds: string[] = [];
 
-    for (const d of drafts) {
-      if (d.confirmed) {
-        published++;
-        continue;
-      }
-      if (d.excluded || d.is_duplicate) {
-        skipped++;
-        continue;
-      }
-      if (!d.question_text?.trim()) {
-        skipped++;
-        continue;
+    // Cache one question_groups row per group_key in this batch so that all
+    // sub-parts of the same multi-part question share one parent.
+    const groupIdByKey = new Map<string, string>();
+
+    const alreadyConfirmed = drafts.filter((d) => d.confirmed);
+    const eligible = drafts.filter((d) => {
+      if (d.confirmed) return false;
+      if (d.excluded || d.is_duplicate) return false;
+      if (!d.question_text?.trim()) return false;
+      return true;
+    });
+    published += alreadyConfirmed.length;
+    skipped += drafts.length - alreadyConfirmed.length - eligible.length;
+
+    // Stable order: group_key first (so parts cluster), then position.
+    eligible.sort((a, b) => {
+      const ka = a.group_key ?? '';
+      const kb = b.group_key ?? '';
+      if (ka !== kb) return ka.localeCompare(kb);
+      return (a.part_position ?? a.position ?? 0) - (b.part_position ?? b.position ?? 0);
+    });
+
+    for (const d of eligible) {
+      let groupId: string | null = null;
+      if (d.group_key && d.stem?.trim()) {
+        const cached = groupIdByKey.get(d.group_key);
+        if (cached) {
+          groupId = cached;
+        } else {
+          const { data: g, error: gErr } = await adminSupabase
+            .from('question_groups')
+            .insert({
+              course_id: upload.course_id,
+              stem: d.stem,
+              stem_image_urls: d.stem_image_urls ?? [],
+              year: d.year ?? null,
+              level: upload.level ?? null,
+              semester: upload.semester ?? null,
+              source_type: 'extracted',
+              status: 'approved',
+            })
+            .select('id')
+            .single();
+          if (gErr || !g) {
+            skipped++;
+            continue;
+          }
+          groupId = g.id;
+          groupIdByKey.set(d.group_key, groupId);
+        }
       }
 
       const { data: q, error: qErr } = await adminSupabase
         .from('questions')
         .insert({
           course_id: upload.course_id,
+          group_id: groupId,
+          part_label: d.part_label ?? null,
+          position: d.part_position ?? null,
           question_text: d.question_text,
           question_type: d.question_type,
           options: d.question_type === 'mcq' ? d.options : null,
@@ -89,7 +130,6 @@ export async function POST(
         contribution_weight: 1.0,
       });
 
-      // Mark this draft as confirmed (kept for audit; actual question lives in `questions`).
       await adminSupabase
         .from('upload_extractions')
         .update({ confirmed: true })

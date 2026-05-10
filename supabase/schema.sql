@@ -120,11 +120,38 @@ CREATE TRIGGER courses_updated_at BEFORE UPDATE ON public.courses
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================================
+-- QUESTION GROUPS — shared stem for multi-part theory questions.
+-- Standalone questions have group_id = NULL.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.question_groups (
+  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  course_id       UUID NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+  stem            TEXT NOT NULL,
+  stem_image_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+  year            SMALLINT,
+  level           SMALLINT CHECK (level IN (100, 200, 300, 400, 500, 600)),
+  semester        SMALLINT CHECK (semester IN (1, 2, 3)),
+  source_type     source_type NOT NULL DEFAULT 'manual',
+  status          moderation_status NOT NULL DEFAULT 'pending',
+  is_deleted      BOOLEAN NOT NULL DEFAULT false,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_question_groups_course ON public.question_groups(course_id);
+DROP TRIGGER IF EXISTS question_groups_updated_at ON public.question_groups;
+CREATE TRIGGER question_groups_updated_at BEFORE UPDATE ON public.question_groups
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================
 -- QUESTIONS — adds level (100-600) and semester (1/2/3)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.questions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id       UUID NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+  group_id        UUID REFERENCES public.question_groups(id) ON DELETE CASCADE,
+  part_label      TEXT,
+  position        INT,
+  points          INT,
   question_text   TEXT NOT NULL,
   options         JSONB,
   correct_answer  TEXT,
@@ -148,6 +175,7 @@ CREATE INDEX IF NOT EXISTS idx_questions_hash     ON public.questions(content_ha
 CREATE INDEX IF NOT EXISTS idx_questions_type     ON public.questions(question_type);
 CREATE INDEX IF NOT EXISTS idx_questions_level    ON public.questions(level);
 CREATE INDEX IF NOT EXISTS idx_questions_semester ON public.questions(semester);
+CREATE INDEX IF NOT EXISTS idx_questions_group    ON public.questions(group_id);
 CREATE INDEX IF NOT EXISTS idx_questions_text_trgm ON public.questions USING GIN (question_text gin_trgm_ops);
 DROP TRIGGER IF EXISTS questions_updated_at ON public.questions;
 CREATE TRIGGER questions_updated_at BEFORE UPDATE ON public.questions
@@ -218,6 +246,14 @@ CREATE TABLE IF NOT EXISTS public.upload_extractions (
   id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   upload_id       UUID NOT NULL REFERENCES public.uploads(id) ON DELETE CASCADE,
   position        INT  NOT NULL DEFAULT 0,
+  -- Multi-part grouping: rows that share the same (upload_id, group_key) are
+  -- materialised into a single question_groups row at publish time. NULL for
+  -- standalone (single-part) questions.
+  group_key       TEXT,
+  stem            TEXT,
+  stem_image_urls JSONB DEFAULT '[]'::jsonb,
+  part_label      TEXT,
+  part_position   INT,
   question_text   TEXT NOT NULL,
   question_type   TEXT NOT NULL DEFAULT 'mcq' CHECK (question_type IN ('mcq','theory')),
   options         JSONB,
@@ -233,8 +269,9 @@ CREATE TABLE IF NOT EXISTS public.upload_extractions (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_extractions_upload ON public.upload_extractions(upload_id);
-CREATE INDEX IF NOT EXISTS idx_extractions_hash   ON public.upload_extractions(content_hash);
+CREATE INDEX IF NOT EXISTS idx_extractions_upload    ON public.upload_extractions(upload_id);
+CREATE INDEX IF NOT EXISTS idx_extractions_hash      ON public.upload_extractions(content_hash);
+CREATE INDEX IF NOT EXISTS idx_extractions_group_key ON public.upload_extractions(upload_id, group_key);
 DROP TRIGGER IF EXISTS upload_extractions_updated_at ON public.upload_extractions;
 CREATE TRIGGER upload_extractions_updated_at BEFORE UPDATE ON public.upload_extractions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();

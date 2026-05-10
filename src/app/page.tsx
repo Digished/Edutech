@@ -2,25 +2,21 @@ import Link from 'next/link';
 import {
   BookIcon,
   CheckIcon,
-  CoinIcon,
   FlaskIcon,
   LockIcon,
   PenIcon,
   SearchIcon,
   SparklesIcon,
   UploadIcon,
-  WalletIcon,
 } from '@/components/icons';
 import { Brand } from '@/components/Logo';
 import {
   AIIllustration,
-  EarnIllustration,
   ModerationIllustration,
   PracticeIllustration,
   QuestionBankIllustration,
   SearchIllustration,
   UploadIllustration,
-  WithdrawalsIllustration,
 } from '@/components/AnimatedIllustrations';
 import { createClient } from '@/lib/supabase/server';
 
@@ -105,39 +101,39 @@ const CONTRIBUTOR_WAYS: ContributorWay[] = [
     ],
   },
   {
-    Illustration: EarnIllustration,
-    eyebrow: 'Get paid for what gets approved',
-    title: 'Earn a flat reward for every 100 approved questions',
-    desc:
-      'Upload past papers, edit, or write new questions. Each batch of 100 that passes review pays you a flat ₦ amount, straight to your wallet. No formulas. No leaderboards. No waiting until month-end.',
-    bullets: [
-      { Icon: CoinIcon, text: 'Fixed payout per 100 approved questions' },
-      { Icon: CheckIcon, text: 'Credits land in your wallet automatically' },
-      { Icon: SparklesIcon, text: 'See your progress to the next payout' },
-    ],
-  },
-  {
-    Illustration: WithdrawalsIllustration,
-    eyebrow: 'Wallet',
-    title: 'Withdraw to any Nigerian bank account',
-    desc:
-      'Connect a bank account once and withdraw your earnings on demand via Paystack. Fees are clear up front, with no hidden cuts.',
-    bullets: [
-      { Icon: WalletIcon, text: 'Direct payouts via Paystack' },
-      { Icon: CoinIcon, text: 'Track every transaction in your wallet' },
-      { Icon: CheckIcon, text: 'Clear, predictable fees' },
-    ],
-  },
-  {
     Illustration: ModerationIllustration,
-    eyebrow: 'Quality first',
+    eyebrow: 'Help your school',
+    title: 'Make the next batch of students study smarter',
+    desc:
+      'Every question you add is one less student walking into an exam blind. Past questions you upload today become the practice set juniors revise from tomorrow.',
+    bullets: [
+      { Icon: BookIcon, text: 'Build the catalogue for your department' },
+      { Icon: CheckIcon, text: 'Fix wrong answers and unclear explanations' },
+      { Icon: SparklesIcon, text: 'Add the questions you wish you had' },
+    ],
+  },
+  {
+    Illustration: PracticeIllustration,
+    eyebrow: 'Get credit',
     title: 'Your name stays on work you can be proud of',
     desc:
-      'Every contribution goes through moderation before it earns. That keeps the bank trustworthy for students and protects the value of your share.',
+      'Approved questions are attributed to you. Build a public track record of contributions across the courses you know best, or stay anonymous when you prefer.',
     bullets: [
-      { Icon: CheckIcon, text: 'Reviewed before going live' },
-      { Icon: LockIcon, text: 'Anonymity options when you prefer' },
-      { Icon: SparklesIcon, text: 'Promotion to contributor after approved work' },
+      { Icon: CheckIcon, text: 'Public contribution profile' },
+      { Icon: LockIcon, text: 'Anonymity toggle on every upload' },
+      { Icon: SparklesIcon, text: 'Recognition badges as you contribute more' },
+    ],
+  },
+  {
+    Illustration: AIIllustration,
+    eyebrow: 'Quality first',
+    title: 'Reviewed before going live',
+    desc:
+      'Every contribution goes through moderation. Duplicates are filtered out, errors are caught, and only clean questions reach the bank — so the work you put in actually gets used.',
+    bullets: [
+      { Icon: CheckIcon, text: 'Automatic duplicate detection' },
+      { Icon: PenIcon, text: 'Edit and improve any question' },
+      { Icon: SparklesIcon, text: 'Moderator feedback when something needs fixing' },
     ],
   },
 ];
@@ -206,8 +202,8 @@ export default async function Home() {
           </h1>
           <p className="mt-5 sm:mt-6 text-base sm:text-lg text-zinc-500 dark:text-zinc-400 max-w-xl mx-auto leading-relaxed">
             Browse, search, and practice from a crowdsourced question bank — with instant AI
-            explanations, theory grading, and timed mock exams. Or contribute and earn from every
-            question you add.
+            explanations, theory grading, and timed mock exams. Or contribute and help your school
+            study smarter.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <a
@@ -223,7 +219,7 @@ export default async function Home() {
               href="#contribute"
               className="inline-flex items-center justify-center gap-2 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 font-medium px-6 py-3 rounded-lg transition-colors text-sm"
             >
-              Earn as a contributor
+              Become a contributor
             </a>
           </div>
 
@@ -232,7 +228,7 @@ export default async function Home() {
             {[
               { value: '50K+', label: 'Questions' },
               { value: '200+', label: 'Courses' },
-              { value: '₦2M+', label: 'Paid out' },
+              { value: '1K+', label: 'Contributors' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white">{stat.value}</div>
@@ -318,11 +314,12 @@ export default async function Home() {
               For contributors
             </div>
             <h2 className="mt-4 text-3xl sm:text-4xl font-bold text-zinc-900 dark:text-white tracking-tight leading-tight">
-              Turn your past papers into income
+              Help build the bank your juniors will study from
             </h2>
             <p className="mt-3 text-zinc-500 dark:text-zinc-400 leading-relaxed">
-              Anyone can contribute. Upload questions, fix errors, or write better explanations — every
-              100 approved questions credits your wallet automatically.
+              Anyone can contribute. Upload past papers, fix wrong answers, or write better
+              explanations — every approved question is credited to you and used by students across
+              your school.
             </p>
           </div>
 
@@ -361,10 +358,10 @@ export default async function Home() {
           {/* Earn CTA */}
           <div className="mt-14 sm:mt-16 rounded-2xl bg-green-600 text-white px-6 py-10 sm:p-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 shadow-sm">
             <div>
-              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight">Ready to earn?</h3>
+              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight">Ready to contribute?</h3>
               <p className="mt-2 text-green-100 text-sm sm:text-base max-w-xl leading-relaxed">
-                Sign up free, upload your first paper, and watch your contribution score grow. Withdrawals
-                land in your bank via Paystack.
+                Sign up free, upload your first paper, and your name goes on every approved
+                question. It takes minutes and helps thousands of students.
               </p>
             </div>
             <a
@@ -388,7 +385,7 @@ export default async function Home() {
               How Examspace works
             </h2>
             <p className="mt-2 text-sm sm:text-base text-zinc-500 dark:text-zinc-400 leading-relaxed">
-              Three steps to start studying — or to start earning.
+              Three steps to start studying — or to start contributing.
             </p>
           </div>
           <div className="grid sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
@@ -406,9 +403,9 @@ export default async function Home() {
               },
               {
                 step: '3',
-                title: 'Study and earn',
+                title: 'Study and give back',
                 desc:
-                  'Practice with AI explanations and earn as your questions are studied by other students.',
+                  'Practice with AI explanations, and add the questions you wish you had when it was your turn.',
               },
             ].map((item) => (
               <div key={item.step} className="text-center">
@@ -440,12 +437,12 @@ export default async function Home() {
                 a: 'You can sign up, browse course names, and contribute for free. To browse and practice questions you subscribe per department — bundle multiple in one checkout.',
               },
               {
-                q: 'How are contributors paid?',
-                a: 'For every 100 of your questions that get approved, your wallet is credited with a fixed amount that admins can change at any time. The credit lands in your wallet automatically — withdraw to any Nigerian bank account once you’re above the minimum.',
+                q: 'Do contributors get paid?',
+                a: 'No — Examspace is a community project, not a paid gig. Subscriptions from students go towards keeping the bank running, AI grading, and moderation. Contributors get public credit on every approved question, recognition badges, and the satisfaction of helping the next batch of students.',
               },
               {
                 q: 'What if I find a wrong answer?',
-                a: 'Use the flag button on any question. Moderators review every flag, and corrections you submit count towards your next 100-question payout.',
+                a: 'Use the flag button on any question. Moderators review every flag, and your correction is attributed to you once it’s approved.',
               },
             ].map((item) => (
               <details

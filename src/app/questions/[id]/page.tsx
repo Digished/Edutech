@@ -15,6 +15,15 @@ interface Question {
   semester: number | null;
   question_type: 'mcq' | 'theory';
   image_urls: string[] | null;
+  group_id: string | null;
+  part_label: string | null;
+  position: number | null;
+  group?: {
+    id: string;
+    stem: string;
+    stem_image_urls: string[] | null;
+  } | null;
+  group_siblings?: { id: string; part_label: string | null; position: number | null }[];
   courses: { name: string; school: string; faculty: string | null; department: string; code: string | null } | null;
   question_analytics: { views_count: number }[];
 }
@@ -283,7 +292,49 @@ export default function QuestionDetailPage({ params }: { params: Promise<{ id: s
             {question.semester && <span className="text-xs text-zinc-400">· Sem {question.semester}</span>}
           </div>
 
+          {question.group && (
+            <div className="mt-2 mb-4 rounded-lg border border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400 mb-1">
+                Shared question
+                {question.group_siblings && question.group_siblings.length > 1
+                  ? ` · part ${question.part_label ?? ''} of ${question.group_siblings.length}`
+                  : ''}
+              </div>
+              <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+                {question.group.stem}
+              </p>
+              {Array.isArray(question.group.stem_image_urls) && question.group.stem_image_urls.length > 0 && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {question.group.stem_image_urls.map((url, i) => (
+                    <a key={`${url}-${i}`} href={url} target="_blank" rel="noopener noreferrer" className="block rounded-md overflow-hidden border border-amber-200 dark:border-amber-900 bg-white">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="w-full h-auto max-h-60 object-contain" />
+                    </a>
+                  ))}
+                </div>
+              )}
+              {question.group_siblings && question.group_siblings.length > 1 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {question.group_siblings.map((s) => (
+                    <Link
+                      key={s.id}
+                      href={`/questions/${s.id}`}
+                      className={`text-[11px] px-2 py-0.5 rounded border ${
+                        s.id === question.id
+                          ? 'border-amber-500 bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-semibold'
+                          : 'border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-400 hover:bg-amber-100/60 dark:hover:bg-amber-950/60'
+                      }`}
+                    >
+                      Part {s.part_label ?? s.position ?? '·'}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <p className="text-zinc-900 dark:text-white leading-relaxed font-medium whitespace-pre-line">
+            {question.part_label ? <span className="text-amber-700 dark:text-amber-400 mr-2">({question.part_label})</span> : null}
             {question.question_text}
           </p>
 

@@ -160,6 +160,10 @@ export interface Database {
         Row: {
           id: string;
           course_id: string;
+          group_id: string | null;
+          part_label: string | null;
+          position: number | null;
+          points: number | null;
           question_text: string;
           options: Json | null;
           correct_answer: string | null;
@@ -180,6 +184,10 @@ export interface Database {
         Insert: {
           id?: string;
           course_id: string;
+          group_id?: string | null;
+          part_label?: string | null;
+          position?: number | null;
+          points?: number | null;
           question_text: string;
           options?: Json | null;
           correct_answer?: string | null;
@@ -199,6 +207,10 @@ export interface Database {
         };
         Update: {
           course_id?: string;
+          group_id?: string | null;
+          part_label?: string | null;
+          position?: number | null;
+          points?: number | null;
           question_text?: string;
           options?: Json | null;
           correct_answer?: string | null;
@@ -213,6 +225,47 @@ export interface Database {
           image_urls?: Json | null;
           explanation?: string | null;
           explanation_generated_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: EmptyRelationships;
+      };
+      question_groups: {
+        Row: {
+          id: string;
+          course_id: string;
+          stem: string;
+          stem_image_urls: Json;
+          year: number | null;
+          level: number | null;
+          semester: number | null;
+          source_type: 'uploaded' | 'manual' | 'extracted';
+          status: 'pending' | 'approved' | 'rejected';
+          is_deleted: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          course_id: string;
+          stem: string;
+          stem_image_urls?: Json;
+          year?: number | null;
+          level?: number | null;
+          semester?: number | null;
+          source_type?: 'uploaded' | 'manual' | 'extracted';
+          status?: 'pending' | 'approved' | 'rejected';
+          is_deleted?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          stem?: string;
+          stem_image_urls?: Json;
+          year?: number | null;
+          level?: number | null;
+          semester?: number | null;
+          status?: 'pending' | 'approved' | 'rejected';
+          is_deleted?: boolean;
           updated_at?: string;
         };
         Relationships: EmptyRelationships;
@@ -344,6 +397,11 @@ export interface Database {
           id: string;
           upload_id: string;
           position: number;
+          group_key: string | null;
+          stem: string | null;
+          stem_image_urls: Json | null;
+          part_label: string | null;
+          part_position: number | null;
           question_text: string;
           question_type: 'mcq' | 'theory';
           options: Json | null;
@@ -363,6 +421,11 @@ export interface Database {
           id?: string;
           upload_id: string;
           position?: number;
+          group_key?: string | null;
+          stem?: string | null;
+          stem_image_urls?: Json | null;
+          part_label?: string | null;
+          part_position?: number | null;
           question_text: string;
           question_type?: 'mcq' | 'theory';
           options?: Json | null;
@@ -380,6 +443,11 @@ export interface Database {
         };
         Update: {
           position?: number;
+          group_key?: string | null;
+          stem?: string | null;
+          stem_image_urls?: Json | null;
+          part_label?: string | null;
+          part_position?: number | null;
           question_text?: string;
           question_type?: 'mcq' | 'theory';
           options?: Json | null;

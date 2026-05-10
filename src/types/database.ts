@@ -80,6 +80,10 @@ export type QuestionOptions = Record<string, string>;
 export interface Question {
   id: string;
   course_id: string;
+  group_id: string | null;
+  part_label: string | null;
+  position: number | null;
+  points: number | null;
   question_text: string;
   options: QuestionOptions | null;
   correct_answer: string | null;
@@ -94,6 +98,21 @@ export interface Question {
   image_urls: string[] | null;
   explanation: string | null;
   explanation_generated_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuestionGroup {
+  id: string;
+  course_id: string;
+  stem: string;
+  stem_image_urls: string[];
+  year: number | null;
+  level: CourseLevel | null;
+  semester: Semester | null;
+  source_type: SourceType;
+  status: ModerationStatus;
+  is_deleted: boolean;
   created_at: string;
   updated_at: string;
 }
