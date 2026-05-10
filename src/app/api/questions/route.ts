@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
           level: level ?? null,
           semester: semester ?? null,
           source_type: 'manual',
-          status: 'approved',
+          status: 'pending',
         })
         .select('id')
         .single();
@@ -211,7 +211,7 @@ export async function POST(req: NextRequest) {
             level: level ?? null,
             semester: semester ?? null,
             source_type: 'manual',
-            status: 'approved',
+            status: 'pending',
             content_hash: partHash,
             image_urls: p.image_urls ?? [],
           })
@@ -229,7 +229,7 @@ export async function POST(req: NextRequest) {
         inserted.push({ id: q.id });
       }
 
-      return created({ group_id: group.id, question_ids: inserted.map((x) => x.id) }, `Added ${inserted.length} parts to the bank`);
+      return created({ group_id: group.id, question_ids: inserted.map((x) => x.id) }, `Submitted ${inserted.length} parts for review`);
     }
 
     // ---------- standalone branch ----------
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
         level: level ?? null,
         semester: semester ?? null,
         source_type: 'manual',
-        status: 'approved',
+        status: 'pending',
         content_hash,
         image_urls: image_urls ?? [],
       })
@@ -292,7 +292,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return created(question, 'Question added to the bank');
+    return created(question, 'Question submitted for review');
   } catch {
     return serverError();
   }

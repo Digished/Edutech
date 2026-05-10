@@ -133,8 +133,9 @@ export default function ReviewExtractionsPage({
           <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">Review extracted questions</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Edit anything you need to fix, attach images for any figure-based questions,
-            and delete the ones you don&apos;t want to publish. Duplicates of existing
-            questions are skipped automatically.
+            and delete the ones you don&apos;t want to submit. Duplicates of existing
+            questions are skipped automatically. Submitted questions go to admin review before
+            appearing in the question bank.
           </p>
         </div>
 
@@ -146,9 +147,9 @@ export default function ReviewExtractionsPage({
 
         {done && (
           <div className="mb-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm px-4 py-3 rounded-lg">
-            Published {done.published} question{done.published === 1 ? '' : 's'}.
-            {done.skipped ? ` ${done.skipped} skipped.` : ''}{' '}
-            <Link href="/questions" className="underline font-medium inline-flex items-center gap-1">View question bank <ArrowRightIcon size={12} /></Link>
+            Submitted {done.published} question{done.published === 1 ? '' : 's'} for admin review.
+            {done.skipped ? ` ${done.skipped} skipped.` : ''} You&apos;ll be notified once they&apos;re approved.{' '}
+            <Link href="/dashboard/contributions" className="underline font-medium inline-flex items-center gap-1">View your contributions <ArrowRightIcon size={12} /></Link>
           </div>
         )}
 
@@ -229,7 +230,7 @@ export default function ReviewExtractionsPage({
           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
             <h2 className="font-semibold text-zinc-900 dark:text-white mb-2">Publish {willPublish} question{willPublish === 1 ? '' : 's'}?</h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
-              These will go live in the question bank immediately. You can&apos;t publish this batch again from this page.
+              These will be sent to admins for review. You&apos;ll be notified as each one is approved or rejected. You can&apos;t submit this batch again from this page.
             </p>
             <div className="flex gap-3">
               <button

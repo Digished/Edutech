@@ -83,7 +83,7 @@ export async function POST(
               level: upload.level ?? null,
               semester: upload.semester ?? null,
               source_type: 'extracted',
-              status: 'approved',
+              status: 'pending',
             })
             .select('id')
             .single();
@@ -111,7 +111,7 @@ export async function POST(
           level: upload.level ?? null,
           semester: upload.semester ?? null,
           source_type: 'extracted',
-          status: 'approved',
+          status: 'pending',
           content_hash: d.content_hash,
           image_urls: d.image_urls ?? [],
         })
@@ -154,7 +154,7 @@ export async function POST(
       })
       .eq('id', id);
 
-    return ok({ published, skipped, question_ids: publishedIds }, `Published ${published} question${published === 1 ? '' : 's'}`);
+    return ok({ published, skipped, question_ids: publishedIds }, `Submitted ${published} question${published === 1 ? '' : 's'} for admin review`);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to publish';
     return serverError(message);

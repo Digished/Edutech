@@ -314,7 +314,7 @@ export default function NewQuestionPage() {
 
         {submitSuccess && (
           <div className="mb-5 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm px-4 py-3 rounded-lg">
-            Question added to the bank. Redirecting…
+            Submitted for admin review. You&apos;ll be notified once it&apos;s approved. Redirecting…
           </div>
         )}
 
