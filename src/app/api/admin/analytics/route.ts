@@ -19,7 +19,7 @@ export async function GET() {
       { count: totalWithdrawals },
       { data: topContributors },
       { data: mostViewedCourses },
-      { data: revenueStats },
+      { data: contributionRewards },
     ] = await Promise.all([
       supabase.from('users').select('*', { count: 'exact', head: true }),
       supabase
@@ -51,12 +51,13 @@ export async function GET() {
         .eq('status', 'approved')
         .eq('is_deleted', false)
         .limit(500),
-      // Revenue summary
+      // Total contributor rewards minted to date (sum of successful credits).
       supabase
-        .from('revenue_pool')
-        .select('total_revenue, payout_pool_amount, distributed')
-        .order('period_start', { ascending: false })
-        .limit(12),
+        .from('wallet_ledger')
+        .select('amount')
+        .eq('reason', 'contribution_reward')
+        .eq('type', 'credit')
+        .eq('status', 'successful'),
     ]);
 
     // Aggregate contributor counts
@@ -82,14 +83,11 @@ export async function GET() {
       .slice(0, 10)
       .map(([course_id, v]) => ({ course_id, ...v }));
 
-    // Revenue totals
-    const totalRevenue = (revenueStats ?? []).reduce(
-      (s, r) => s + (r.total_revenue as number),
+    // Sum contribution rewards minted across the platform.
+    const totalContributorRewards = (contributionRewards ?? []).reduce(
+      (s, r) => s + (Number(r.amount) || 0),
       0,
     );
-    const totalDistributed = (revenueStats ?? [])
-      .filter((r) => r.distributed)
-      .reduce((s, r) => s + (r.payout_pool_amount as number), 0);
 
     return ok({
       users: {
@@ -102,11 +100,7 @@ export async function GET() {
       },
       uploads: { total: totalUploads ?? 0 },
       withdrawals: { total: totalWithdrawals ?? 0 },
-      revenue: {
-        total_collected: totalRevenue,
-        total_distributed: totalDistributed,
-        periods: revenueStats ?? [],
-      },
+      contributor_rewards: { total_paid_out: totalContributorRewards },
       top_contributors: topContributorsList,
       most_viewed_courses: topCoursesList,
     });

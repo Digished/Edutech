@@ -18,6 +18,10 @@ interface Course {
   code: string | null;
 }
 
+interface University { id: string; name: string }
+interface Faculty   { id: string; name: string; university_id: string }
+interface Department { id: string; name: string; faculty_id: string }
+
 type QType = 'mcq' | 'theory';
 
 interface Suggestion {
@@ -33,6 +37,17 @@ export default function NewQuestionPage() {
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState('');
+
+  // Inline course creation — mirrors /dashboard/uploads.
+  const [showAddCourse, setShowAddCourse] = useState(false);
+  const [courseForm, setCourseForm] = useState({
+    name: '', code: '', school: '', faculty: '', department: '',
+  });
+  const [courseLoading, setCourseLoading] = useState(false);
+  const [courseError, setCourseError] = useState('');
+  const [universities, setUniversities] = useState<University[]>([]);
+  const [faculties, setFaculties] = useState<Faculty[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [questionText, setQuestionText] = useState('');
   const [year, setYear] = useState<number | ''>('');
   const [level, setLevel] = useState<number | ''>('');
@@ -54,11 +69,62 @@ export default function NewQuestionPage() {
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  async function loadCourses() {
+    const r = await fetch('/api/courses?limit=200');
+    if (r.ok) { const j = await r.json(); setCourses(j.data ?? []); }
+  }
+  useEffect(() => { loadCourses(); }, []);
+
   useEffect(() => {
-    fetch('/api/courses?limit=200').then(async (r) => {
-      if (r.ok) { const j = await r.json(); setCourses(j.data ?? []); }
+    fetch('/api/universities').then(async (r) => {
+      const j = await r.json();
+      setUniversities(j.data ?? []);
     });
   }, []);
+
+  // Cascade: school -> faculties; faculty -> departments.
+  useEffect(() => {
+    if (!courseForm.school) { setFaculties([]); return; }
+    fetch(`/api/faculties?university=${encodeURIComponent(courseForm.school)}`).then(async (r) => {
+      const j = await r.json();
+      setFaculties(j.data ?? []);
+    });
+  }, [courseForm.school]);
+
+  useEffect(() => {
+    if (!courseForm.faculty) { setDepartments([]); return; }
+    const facultyRow = faculties.find((f) => f.name === courseForm.faculty);
+    if (!facultyRow) { setDepartments([]); return; }
+    fetch(`/api/departments?faculty_id=${facultyRow.id}`).then(async (r) => {
+      const j = await r.json();
+      setDepartments(j.data ?? []);
+    });
+  }, [courseForm.faculty, faculties]);
+
+  async function handleAddCourse(e: React.MouseEvent) {
+    e.preventDefault();
+    setCourseError('');
+    setCourseLoading(true);
+    try {
+      const res = await fetch('/api/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(courseForm),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setCourseError(json.error ?? 'Could not create the course.');
+        return;
+      }
+      const newCourse = json.data as Course;
+      setCourses((prev) => [...prev, newCourse]);
+      setCourseId(newCourse.id);
+      setCourseForm({ name: '', code: '', school: '', faculty: '', department: '' });
+      setShowAddCourse(false);
+    } finally {
+      setCourseLoading(false);
+    }
+  }
 
   function updateOption(idx: number, value: string) {
     setOptions((arr) => arr.map((o, i) => (i === idx ? { ...o, value } : o)));
@@ -218,7 +284,18 @@ export default function NewQuestionPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
           <div>
-            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Course</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Course <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowAddCourse((v) => !v)}
+                className="text-xs text-green-600 hover:text-green-700 font-medium"
+              >
+                {showAddCourse ? 'Cancel' : '+ Add new course'}
+              </button>
+            </div>
             <SearchSelect
               options={courseOptions}
               value={courseId}
@@ -226,6 +303,65 @@ export default function NewQuestionPage() {
               placeholder="Pick a course"
               emptyText="No matching courses"
             />
+
+            {showAddCourse && (
+              <div className="mt-3 p-4 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-3">New course</p>
+                {courseError && (
+                  <p className="text-xs text-red-600 dark:text-red-400 mb-2">{courseError}</p>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input
+                    type="text"
+                    value={courseForm.name}
+                    onChange={(e) => setCourseForm((f) => ({ ...f, name: e.target.value }))}
+                    placeholder="Course name *"
+                    className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <input
+                    type="text"
+                    value={courseForm.code}
+                    onChange={(e) => setCourseForm((f) => ({ ...f, code: e.target.value }))}
+                    placeholder="Course code (e.g. CSC301)"
+                    className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <select
+                    value={courseForm.school}
+                    onChange={(e) => setCourseForm((f) => ({ ...f, school: e.target.value, faculty: '', department: '' }))}
+                    className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">University *</option>
+                    {universities.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                  </select>
+                  <select
+                    value={courseForm.faculty}
+                    onChange={(e) => setCourseForm((f) => ({ ...f, faculty: e.target.value, department: '' }))}
+                    disabled={!courseForm.school}
+                    className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-60"
+                  >
+                    <option value="">Faculty *</option>
+                    {faculties.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+                  </select>
+                  <select
+                    value={courseForm.department}
+                    onChange={(e) => setCourseForm((f) => ({ ...f, department: e.target.value }))}
+                    disabled={!courseForm.faculty}
+                    className="sm:col-span-2 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-60"
+                  >
+                    <option value="">Department *</option>
+                    {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  disabled={courseLoading}
+                  onClick={handleAddCourse}
+                  className="mt-3 px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  {courseLoading ? 'Creating…' : 'Create course'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div>

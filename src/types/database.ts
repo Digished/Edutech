@@ -19,7 +19,9 @@ export type CourseLevel = (typeof COURSE_LEVELS)[number];
 export const SEMESTERS = [1, 2, 3] as const;
 export type Semester = (typeof SEMESTERS)[number];
 
-export const HIGH_YIELD_BONUS_PER_TAG = 0.2;
+// Default fallback only — the live value comes from public.admin_settings.
+export const DEFAULT_REWARD_PER_100_QUESTIONS = 1000;
+export const REWARD_BUCKET_SIZE = 100;
 
 export interface User {
   id: string;
@@ -105,13 +107,6 @@ export interface QuestionContribution {
   created_at: string;
 }
 
-export interface HighYieldTag {
-  id: string;
-  question_id: string;
-  user_id: string;
-  created_at: string;
-}
-
 export interface Upload {
   id: string;
   user_id: string;
@@ -168,17 +163,9 @@ export interface Withdrawal {
   updated_at: string;
 }
 
-export interface RevenuePool {
-  id: string;
-  total_revenue: number;
-  contribution_pool_percentage: number;
-  payout_pool_amount: number;
-  period_start: string;
-  period_end: string;
-  distributed: boolean;
-  distributed_at: string | null;
-  notes: string | null;
-  created_at: string;
+export interface AdminSettings {
+  reward_per_100_questions: number;
+  reward_bucket_size: number;
 }
 
 export interface QuestionDuplicate {

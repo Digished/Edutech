@@ -20,10 +20,9 @@ export async function GET(req: NextRequest) {
       .from('question_contributions')
       .select(
         `
-        id, contribution_type, contribution_weight, created_at,
-        questions(id, question_text, course_id, status,
-          courses(name, school, department),
-          question_analytics(views_count)
+        id, contribution_type, created_at,
+        questions(id, question_text, course_id, status, is_deleted,
+          courses(name, school, department)
         )
       `,
         { count: 'exact' },

@@ -106,14 +106,14 @@ const CONTRIBUTOR_WAYS: ContributorWay[] = [
   },
   {
     Illustration: EarnIllustration,
-    eyebrow: 'Revenue share',
-    title: 'Earn every time someone studies your questions',
+    eyebrow: 'Get paid for what gets approved',
+    title: 'Earn a flat reward for every 100 approved questions',
     desc:
-      'Every approved upload, edit, and explanation contributes to your weight in the monthly revenue pool. The more your work is used, the more you earn.',
+      'Upload past papers, edit, or write new questions. Each batch of 100 that passes review pays you a flat ₦ amount, straight to your wallet. No formulas. No leaderboards. No waiting until month-end.',
     bullets: [
-      { Icon: CoinIcon, text: 'Monthly payouts from the revenue pool' },
-      { Icon: CheckIcon, text: 'Transparent contribution score' },
-      { Icon: SparklesIcon, text: 'Bonus weight for high-quality work' },
+      { Icon: CoinIcon, text: 'Fixed payout per 100 approved questions' },
+      { Icon: CheckIcon, text: 'Credits land in your wallet automatically' },
+      { Icon: SparklesIcon, text: 'See your progress to the next payout' },
     ],
   },
   {
@@ -322,7 +322,7 @@ export default async function Home() {
             </h2>
             <p className="mt-3 text-zinc-500 dark:text-zinc-400 leading-relaxed">
               Anyone can contribute. Upload questions, fix errors, or write better explanations — every
-              approved action earns a share of the monthly revenue pool.
+              100 approved questions credits your wallet automatically.
             </p>
           </div>
 
@@ -441,11 +441,11 @@ export default async function Home() {
               },
               {
                 q: 'How are contributors paid?',
-                a: 'Each month a share of platform revenue is split among approved contributors based on contribution weight and how often their work is studied. Earnings show up in your wallet and you can withdraw to a Nigerian bank account.',
+                a: 'For every 100 of your questions that get approved, your wallet is credited with a fixed amount that admins can change at any time. The credit lands in your wallet automatically — withdraw to any Nigerian bank account once you’re above the minimum.',
               },
               {
                 q: 'What if I find a wrong answer?',
-                a: 'Use the flag button on any question. Moderators review every flag, and contributors who fix mistakes earn extra weight in the revenue split.',
+                a: 'Use the flag button on any question. Moderators review every flag, and corrections you submit count towards your next 100-question payout.',
               },
             ].map((item) => (
               <details

@@ -26,10 +26,10 @@ interface UserProfile {
   role: 'student' | 'contributor' | 'admin';
 }
 
-interface UnlockedDept {
-  id: string;
-  school: string;
-  department: string;
+interface UnlockedFaculty {
+  faculty_id: string;
+  school: string | null;
+  faculty: string | null;
   plan: 'monthly' | 'quarterly' | 'yearly';
   ends_at: string | null;
 }
@@ -42,7 +42,7 @@ interface ContributorStatus {
   approved_contributions: number;
   promotion_threshold: number;
   progress_to_contributor: number;
-  unlocked_departments: UnlockedDept[];
+  unlocked_faculties: UnlockedFaculty[];
 }
 
 interface PausedSession {
@@ -143,7 +143,7 @@ export default function DashboardPage() {
   const firstName = user.full_name?.split(' ')[0] ?? 'there';
   const isAdmin = status?.is_admin ?? false;
   const isContributor = status?.is_contributor ?? false;
-  const unlocked = status?.unlocked_departments ?? [];
+  const unlocked = status?.unlocked_faculties ?? [];
   const accessUnlocked = isAdmin || unlocked.length > 0;
   const promoPct = status
     ? Math.min(100, Math.round((status.approved_contributions / status.promotion_threshold) * 100))
@@ -153,7 +153,7 @@ export default function DashboardPage() {
     {
       label: accessUnlocked ? 'Browse questions' : 'Subscribe to browse',
       href: accessUnlocked ? '/questions' : '/dashboard/subscription',
-      desc: accessUnlocked ? 'Search your unlocked departments' : 'Unlock a department to browse',
+      desc: accessUnlocked ? 'Search your unlocked faculties' : 'Unlock a faculty to browse',
       Icon: BookIcon,
     },
     { label: 'Practice exam', href: '/dashboard/practice', desc: 'Sit a mock exam', Icon: FlaskIcon },
@@ -208,8 +208,8 @@ export default function DashboardPage() {
             {isAdmin
               ? 'Admin · full access'
               : unlocked.length === 0
-              ? 'No departments unlocked yet'
-              : `${unlocked.length} department${unlocked.length === 1 ? '' : 's'} unlocked`}
+              ? 'No faculties unlocked yet'
+              : `${unlocked.length} ${unlocked.length === 1 ? 'faculty' : 'faculties'} unlocked`}
           </p>
         </div>
 
@@ -248,11 +248,11 @@ export default function DashboardPage() {
                   {isAdmin
                     ? 'Full access'
                     : unlocked.length === 0
-                    ? 'No departments unlocked'
-                    : `${unlocked.length} department${unlocked.length === 1 ? '' : 's'} unlocked`}
+                    ? 'No faculties unlocked'
+                    : `${unlocked.length} ${unlocked.length === 1 ? 'faculty' : 'faculties'} unlocked`}
                 </div>
                 <div className="text-[11px] text-zinc-400 mt-0.5">
-                  {isAdmin ? 'Manage subscriptions' : 'Manage or add departments'}
+                  {isAdmin ? 'Manage subscriptions' : 'Manage or add faculties'}
                 </div>
               </div>
               <span
@@ -269,10 +269,10 @@ export default function DashboardPage() {
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {unlocked.slice(0, 4).map((d) => (
                   <span
-                    key={d.id}
+                    key={d.faculty_id}
                     className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
                   >
-                    {d.department}
+                    {d.faculty ?? 'Faculty'}
                   </span>
                 ))}
                 {unlocked.length > 4 && (

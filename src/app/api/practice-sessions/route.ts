@@ -6,6 +6,7 @@ import { getAuthUser } from '@/lib/utils/auth';
 import {
   created, badRequest, unauthorized, serverError, paginated,
 } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 import { getPagination } from '@/lib/utils/pagination';
 import type { Json } from '@/types/supabase';
 
@@ -27,7 +28,7 @@ const schema = z.object({
   semester: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
   total_questions: z.number().int().min(1),
   duration_ms: z.number().int().min(0).nullable().optional(),
-  details: z.array(detailSchema).max(200),
+  details: z.array(detailSchema).max(2000),
 });
 
 // GET /api/practice-sessions — list own sessions, newest first
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const { details, total_questions, duration_ms, course_id, question_type, reveal_mode, level, semester } = parsed.data;
     const graded = details.filter((d) => typeof d.score === 'number');

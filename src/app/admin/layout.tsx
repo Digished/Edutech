@@ -36,6 +36,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/faculties', label: 'Faculties' },
     { href: '/admin/departments', label: 'Departments' },
     { href: '/admin/courses', label: 'Courses' },
+    { href: '/admin/settings', label: 'Settings' },
   ];
 
   return (

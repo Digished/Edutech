@@ -13,7 +13,7 @@ type Plan = 'monthly' | 'quarterly' | 'yearly';
 interface PlanCard {
   id: Plan;
   label: string;
-  amount: number;
+  amount: number;       // per faculty
   perks: string[];
   badge?: string;
   monthlyEq: number;
@@ -25,7 +25,7 @@ const PLANS: PlanCard[] = [
     label: 'Monthly',
     amount: 1500,
     monthlyEq: 1500,
-    perks: ['Per department', 'Cancel anytime', 'Step-by-step explanations'],
+    perks: ['One faculty', 'Cancel anytime', 'Step-by-step explanations'],
   },
   {
     id: 'quarterly',
@@ -33,7 +33,7 @@ const PLANS: PlanCard[] = [
     amount: 3000,
     monthlyEq: 1000,
     badge: 'Save ₦1,500',
-    perks: ['Save vs monthly', 'Per department', 'Step-by-step explanations'],
+    perks: ['Save vs monthly', 'One faculty', 'Step-by-step explanations'],
   },
   {
     id: 'yearly',
@@ -41,7 +41,7 @@ const PLANS: PlanCard[] = [
     amount: 10000,
     monthlyEq: Math.round(10000 / 12),
     badge: 'Best value',
-    perks: ['Best value', 'Per department', 'Priority support'],
+    perks: ['Best value', 'One faculty', 'Priority support'],
   },
 ];
 
@@ -49,12 +49,11 @@ const CONTRIBUTOR_DISCOUNT = 0.6; // 60% off
 
 interface University { id: string; name: string; short_name: string | null }
 interface Faculty   { id: string; name: string; university_id: string }
-interface Department { id: string; name: string; faculty_id?: string; faculties?: { id: string; name: string } | null }
 
-interface UnlockedDept {
-  id: string;
-  school: string;
-  department: string;
+interface UnlockedFaculty {
+  faculty_id: string;
+  school: string | null;
+  faculty: string | null;
   plan: Plan;
   starts_at: string | null;
   ends_at: string | null;
@@ -64,7 +63,7 @@ interface Status {
   is_admin: boolean;
   is_contributor: boolean;
   has_full_access: boolean;
-  unlocked_departments: UnlockedDept[];
+  unlocked_faculties: UnlockedFaculty[];
 }
 
 function ngn(value: number): string {
@@ -75,10 +74,8 @@ export default function SubscriptionPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [universities, setUniversities] = useState<University[]>([]);
   const [faculties, setFaculties] = useState<Faculty[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [school, setSchool] = useState('');
-  const [facultyId, setFacultyId] = useState('');
-  const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [universityId, setUniversityId] = useState('');
+  const [selectedFacultyIds, setSelectedFacultyIds] = useState<string[]>([]);
   const [plan, setPlan] = useState<Plan>('quarterly');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -109,11 +106,11 @@ export default function SubscriptionPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // School → faculties list.
+  // University → faculties.
   useEffect(() => {
-    if (!school) { setFaculties([]); setFacultyId(''); return; }
+    if (!universityId) { setFaculties([]); setSelectedFacultyIds([]); return; }
     let cancelled = false;
-    fetch(`/api/faculties?university=${encodeURIComponent(school)}`).then(async (r) => {
+    fetch(`/api/faculties?university_id=${encodeURIComponent(universityId)}`).then(async (r) => {
       if (cancelled) return;
       if (r.ok) {
         const j = await r.json();
@@ -121,34 +118,15 @@ export default function SubscriptionPage() {
       }
     });
     return () => { cancelled = true; };
-  }, [school]);
+  }, [universityId]);
 
-  // School (optionally narrowed by faculty) → department list.
-  useEffect(() => {
-    if (!school) { setDepartments([]); setSelectedDepts([]); return; }
-    let cancelled = false;
-    const url = facultyId
-      ? `/api/departments?faculty_id=${facultyId}`
-      : `/api/departments?university=${encodeURIComponent(school)}`;
-    fetch(url).then(async (r) => {
-      if (cancelled) return;
-      if (r.ok) {
-        const j = await r.json();
-        setDepartments(j.data ?? []);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [school, facultyId]);
-
-  const unlockedKeys = useMemo(() => {
-    const set = new Set<string>();
-    (status?.unlocked_departments ?? []).forEach((d) => set.add(`${d.school}::${d.department}`));
-    return set;
+  const unlockedFacultyIds = useMemo(() => {
+    return new Set((status?.unlocked_faculties ?? []).map((u) => u.faculty_id));
   }, [status]);
 
   const pricing = useMemo(() => {
     const planRow = PLANS.find((p) => p.id === plan)!;
-    const eligible = selectedDepts.filter((d) => !unlockedKeys.has(`${school}::${d}`));
+    const eligible = selectedFacultyIds.filter((id) => !unlockedFacultyIds.has(id));
     const count = eligible.length;
     const gross = planRow.amount * count;
     const isContributor = !!status?.is_contributor;
@@ -156,48 +134,41 @@ export default function SubscriptionPage() {
     const discount = Math.round(gross * discountPct);
     const net = gross - discount;
     return { planRow, count, gross, discount, net, isContributor, eligible };
-  }, [plan, selectedDepts, unlockedKeys, school, status?.is_contributor]);
+  }, [plan, selectedFacultyIds, unlockedFacultyIds, status?.is_contributor]);
 
-  function toggleDept(name: string) {
-    setSelectedDepts((arr) => (arr.includes(name) ? arr.filter((d) => d !== name) : [...arr, name]));
+  function toggleFaculty(id: string) {
+    setSelectedFacultyIds((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
   }
 
   async function startCheckout() {
     setError('');
-    if (!school) { setError('Pick a university'); return; }
-    if (pricing.count === 0) { setError('Pick at least one department to unlock'); return; }
+    if (!universityId) { setError('Please pick a university.'); return; }
+    if (pricing.count === 0) { setError('Please pick at least one faculty.'); return; }
     setSubmitting(true);
     try {
       const res = await fetch('/api/subscriptions', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan,
-          combos: pricing.eligible.map((d) => {
-            const row = departments.find((r) => r.name === d);
-            const facultyName = row?.faculties?.name ?? null;
-            return facultyName
-              ? { school, faculty: facultyName, department: d }
-              : { school, department: d };
-          }),
-        }),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, faculty_ids: pricing.eligible }),
       });
       const json = await res.json();
       if (!res.ok) {
-        setError(json.error ?? 'Could not start checkout');
+        setError(json.error ?? 'Could not start checkout.');
         return;
       }
       window.location.href = json.data.authorization_url;
     } catch {
-      setError('Network error');
+      setError('Network error. Please try again.');
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function cancelOne(id: string) {
-    setCancelling(id);
+  async function cancelOne(facultyId: string) {
+    // Cancel by faculty_id — backend deletes/inactivates the active sub.
+    setCancelling(facultyId);
     try {
-      const res = await fetch(`/api/subscriptions/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/subscriptions/${facultyId}`, { method: 'DELETE' });
       if (res.ok) await refreshStatus();
     } finally {
       setCancelling(null);
@@ -214,7 +185,7 @@ export default function SubscriptionPage() {
 
   const isAdmin = !!status?.is_admin;
   const isContributor = !!status?.is_contributor;
-  const unlocked = status?.unlocked_departments ?? [];
+  const unlocked = status?.unlocked_faculties ?? [];
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -235,14 +206,14 @@ export default function SubscriptionPage() {
           <div>
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white">Subscriptions</h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Subscribe per university and department. Bundle multiple departments in one checkout.
+              Subscribe per faculty. Pick as many faculties as you need — pay for them all in one checkout.
             </p>
           </div>
         </div>
 
         {isAdmin && (
           <div className="mb-5 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-900 text-blue-800 dark:text-blue-300 px-4 py-3 rounded-lg text-xs">
-            You&apos;re an admin — you have access to every department without subscribing.
+            You&apos;re an admin — you have access to every faculty without subscribing.
           </div>
         )}
 
@@ -252,14 +223,13 @@ export default function SubscriptionPage() {
           </div>
         )}
 
-        {/* Active subscriptions */}
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2">Your unlocked departments</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2">Your unlocked faculties</h2>
         {unlocked.length === 0 ? (
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 text-sm text-zinc-500 dark:text-zinc-400 mb-6">
             <div className="inline-flex items-center gap-2 text-zinc-700 dark:text-zinc-200 font-medium mb-1">
               <LockIcon size={14} /> Nothing unlocked yet
             </div>
-            <p className="text-xs">Pick a university and one or more departments below to subscribe.</p>
+            <p className="text-xs">Pick a university and one or more faculties below to subscribe.</p>
           </div>
         ) : (
           <div className="space-y-2 mb-6">
@@ -268,10 +238,10 @@ export default function SubscriptionPage() {
                 ? Math.max(0, Math.ceil((new Date(d.ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
                 : null;
               return (
-                <div key={d.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex items-start justify-between gap-3 flex-wrap">
+                <div key={d.faculty_id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 flex items-start justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-zinc-900 dark:text-white">
-                      {d.department} <span className="text-zinc-400 font-normal">· {d.school}</span>
+                      {d.faculty ?? 'Faculty'} <span className="text-zinc-400 font-normal">· {d.school ?? '—'}</span>
                     </div>
                     <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
                       {PLANS.find((p) => p.id === d.plan)?.label ?? d.plan} ·{' '}
@@ -281,12 +251,12 @@ export default function SubscriptionPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => cancelOne(d.id)}
-                    disabled={cancelling === d.id}
+                    onClick={() => cancelOne(d.faculty_id)}
+                    disabled={cancelling === d.faculty_id}
                     className="text-xs text-zinc-500 hover:text-red-600 disabled:opacity-50 inline-flex items-center gap-1"
                     title="Cancel"
                   >
-                    <TrashIcon size={12} /> {cancelling === d.id ? 'Cancelling…' : 'Cancel'}
+                    <TrashIcon size={12} /> {cancelling === d.faculty_id ? 'Cancelling…' : 'Cancel'}
                   </button>
                 </div>
               );
@@ -294,10 +264,9 @@ export default function SubscriptionPage() {
           </div>
         )}
 
-        {/* Checkout */}
         {!isAdmin && (
           <>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2">Unlock more departments</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2">Unlock more faculties</h2>
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 space-y-5">
               {error && (
                 <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm px-3 py-2 rounded-lg">
@@ -305,48 +274,37 @@ export default function SubscriptionPage() {
                 </div>
               )}
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">University</label>
-                  <SearchSelect
-                    options={universities.map((u) => ({ value: u.name, label: u.name, hint: u.short_name ?? undefined }))}
-                    value={school}
-                    onChange={(v) => { setSchool(v); setFacultyId(''); setSelectedDepts([]); }}
-                    placeholder="Pick a university"
-                    emptyText="No matching universities"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Faculty (optional)</label>
-                  <select
-                    value={facultyId}
-                    onChange={(e) => { setFacultyId(e.target.value); setSelectedDepts([]); }}
-                    disabled={!school || faculties.length === 0}
-                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-60"
-                  >
-                    <option value="">All faculties</option>
-                    {faculties.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">University</label>
+                <SearchSelect
+                  options={universities.map((u) => ({ value: u.id, label: u.name, hint: u.short_name ?? undefined }))}
+                  value={universityId}
+                  onChange={(v) => { setUniversityId(v); setSelectedFacultyIds([]); }}
+                  placeholder="Pick a university"
+                  emptyText="No matching universities"
+                />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">Departments</label>
-                {!school ? (
+                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+                  Faculties <span className="text-red-500">*</span>
+                  <span className="ml-2 text-zinc-400 font-normal">(pick one or more)</span>
+                </label>
+                {!universityId ? (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">Pick a university first.</p>
-                ) : departments.length === 0 ? (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">No departments listed for this university.</p>
+                ) : faculties.length === 0 ? (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">No faculties listed for this university yet.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {departments.map((d) => {
-                      const checked = selectedDepts.includes(d.name);
-                      const already = unlockedKeys.has(`${school}::${d.name}`);
+                    {faculties.map((f) => {
+                      const checked = selectedFacultyIds.includes(f.id);
+                      const already = unlockedFacultyIds.has(f.id);
                       return (
                         <button
-                          key={d.id}
+                          key={f.id}
                           type="button"
                           disabled={already}
-                          onClick={() => toggleDept(d.name)}
+                          onClick={() => toggleFaculty(f.id)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                             already
                               ? 'border-green-300 bg-green-50 text-green-700 cursor-not-allowed dark:border-green-800 dark:bg-green-950 dark:text-green-400'
@@ -356,8 +314,10 @@ export default function SubscriptionPage() {
                           }`}
                           title={already ? 'Already unlocked' : ''}
                         >
-                          {already ? <CheckIcon size={12} className="inline -mt-0.5 mr-1" /> : checked ? <CheckIcon size={12} className="inline -mt-0.5 mr-1" /> : <PlusIcon size={12} className="inline -mt-0.5 mr-1" />}
-                          {d.name}
+                          {already || checked
+                            ? <CheckIcon size={12} className="inline -mt-0.5 mr-1" />
+                            : <PlusIcon size={12} className="inline -mt-0.5 mr-1" />}
+                          {f.name}
                         </button>
                       );
                     })}
@@ -390,17 +350,16 @@ export default function SubscriptionPage() {
                           )}
                         </div>
                         <div className="text-base font-bold text-zinc-900 dark:text-white">{ngn(p.amount)}</div>
-                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">≈ {ngn(p.monthlyEq)}/month per dept</div>
+                        <div className="text-[11px] text-zinc-500 dark:text-zinc-400">≈ {ngn(p.monthlyEq)}/month per faculty</div>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Pricing summary */}
               <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-100 dark:border-zinc-800 p-4 text-sm">
                 <div className="flex items-center justify-between text-zinc-700 dark:text-zinc-200">
-                  <span>{ngn(pricing.planRow.amount)} × {pricing.count} department{pricing.count === 1 ? '' : 's'}</span>
+                  <span>{ngn(pricing.planRow.amount)} × {pricing.count} {pricing.count === 1 ? 'faculty' : 'faculties'}</span>
                   <span>{ngn(pricing.gross)}</span>
                 </div>
                 {pricing.isContributor && pricing.discount > 0 && (
@@ -420,7 +379,11 @@ export default function SubscriptionPage() {
                 disabled={submitting || pricing.count === 0}
                 className="w-full inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white font-medium py-3 rounded-lg text-sm transition-colors"
               >
-                {submitting ? 'Starting checkout…' : pricing.count === 0 ? 'Pick a department to subscribe' : `Pay ${ngn(pricing.net)} via Paystack`}
+                {submitting
+                  ? 'Starting checkout…'
+                  : pricing.count === 0
+                  ? 'Pick at least one faculty'
+                  : `Pay ${ngn(pricing.net)} via Paystack`}
                 {pricing.count > 0 && !submitting && <ArrowRightIcon size={14} />}
               </button>
 

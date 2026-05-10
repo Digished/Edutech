@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/utils/auth';
 import { gradeTheoryAnswer } from '@/lib/ocr/answers';
 import { canRead, loadAccessSummary } from '@/lib/access/gate';
 import { ok, badRequest, forbidden, unauthorized, notFound, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   question_id: z.string().uuid(),
@@ -20,12 +21,12 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const supabase = await createClient();
     const { data: question } = await supabase
       .from('questions')
-      .select('id, question_text, question_type, correct_answer, status, is_deleted, courses(school, department)')
+      .select('id, question_text, question_type, correct_answer, status, is_deleted, courses(faculty_id)')
       .eq('id', parsed.data.question_id)
       .single();
 
@@ -37,9 +38,9 @@ export async function POST(req: NextRequest) {
     }
 
     const access = await loadAccessSummary(profile);
-    const courseRow = (question.courses ?? null) as unknown as { school: string | null; department: string | null } | null;
-    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
-      return forbidden('Subscribe to unlock this department');
+    const courseRow = (question.courses ?? null) as unknown as { faculty_id: string | null } | null;
+    if (!canRead(access, courseRow?.faculty_id ?? null)) {
+      return forbidden('Subscribe to this faculty to unlock the question.');
     }
 
     // gradeTheoryAnswer accepts a null reference and grades from the model's

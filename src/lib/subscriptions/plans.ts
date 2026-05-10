@@ -1,11 +1,11 @@
 import { SubscriptionPlan } from '@/types/database';
 
-// Per-department pricing for paid access. Amounts are in Naira.
+// Per-faculty pricing for paid access. Amounts are in Naira.
 export const SUBSCRIPTION_PLANS: Record<
   SubscriptionPlan,
   {
     label: string;
-    amount: number;        // per (school, department) combo
+    amount: number;        // per faculty
     durationDays: number;
     monthlyEquivalent: number;
     perks: string[];
@@ -16,21 +16,21 @@ export const SUBSCRIPTION_PLANS: Record<
     amount: 1500,
     durationDays: 30,
     monthlyEquivalent: 1500,
-    perks: ['Full access to the chosen department', 'Practice exams', 'Step-by-step explanations'],
+    perks: ['Full access to every department in the chosen faculty', 'Practice exams', 'Step-by-step explanations'],
   },
   quarterly: {
     label: '3 months',
     amount: 3000,
     durationDays: 90,
     monthlyEquivalent: 1000,
-    perks: ['Save ₦1,500 vs monthly', 'Full access to the chosen department', 'Step-by-step explanations'],
+    perks: ['Save ₦1,500 vs monthly', 'Full access to every department in the chosen faculty', 'Step-by-step explanations'],
   },
   yearly: {
     label: '12 months',
     amount: 10000,
     durationDays: 365,
     monthlyEquivalent: Math.round(10000 / 12),
-    perks: ['Best value — save ₦8,000', 'Full access to the chosen department', 'Priority support'],
+    perks: ['Best value — save ₦8,000', 'Full access to every department in the chosen faculty', 'Priority support'],
   },
 };
 

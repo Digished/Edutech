@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireRole } from '@/lib/utils/auth';
 import { verifyAccountNumber } from '@/lib/paystack/transfers';
 import { ok, badRequest, unauthorized, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   account_number: z.string().regex(/^\d{10}$/, 'Account number must be 10 digits'),
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     try {
       const data = await verifyAccountNumber(parsed.data.account_number, parsed.data.bank_code);

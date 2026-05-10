@@ -8,17 +8,15 @@ import { paidShareForCombo, priceBundle } from '@/lib/subscriptions/plans';
 import {
   created, badRequest, unauthorized, serverError, paginated,
 } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 import { getPagination } from '@/lib/utils/pagination';
 
-const comboSchema = z.object({
-  school: z.string().min(2),
-  department: z.string().min(2),
-  faculty: z.string().min(2).optional(),
-});
-
+// One-shot checkout buys access to one or more faculties at the chosen plan.
+// Each faculty becomes a row in the subscriptions table; all rows share the
+// same Paystack `reference` so they activate together when the charge succeeds.
 const schema = z.object({
   plan: z.enum(['monthly', 'quarterly', 'yearly']),
-  combos: z.array(comboSchema).min(1).max(20),
+  faculty_ids: z.array(z.string().uuid()).min(1).max(20),
   callback_path: z.string().optional(),
 });
 
@@ -47,30 +45,47 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/subscriptions — start a Paystack checkout that will unlock the
-// chosen list of (school, department) combos. Each combo becomes one row in
-// the subscriptions table; all rows share the same Paystack `reference` so
-// they activate together when the charge succeeds.
 export async function POST(req: NextRequest) {
   try {
     const { authUser, profile, error } = await getAuthUser();
     if (error || !authUser || !profile) return unauthorized();
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
-    // Dedup combos within a single checkout.
-    const seen = new Set<string>();
-    const combos = parsed.data.combos.filter((c) => {
-      const key = `${c.school}::${c.department}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-    if (combos.length === 0) return badRequest('Pick at least one department');
+    const requestedFacultyIds = Array.from(new Set(parsed.data.faculty_ids));
 
     const isContributor = profile.role === 'contributor' || profile.role === 'admin';
+    const admin = createAdminClient();
+
+    // Resolve faculty + university for each id so the row carries the full pointer.
+    const { data: facultyRows, error: facErr } = await admin
+      .from('faculties')
+      .select('id, name, university_id, universities(id, name)')
+      .in('id', requestedFacultyIds);
+    if (facErr) return serverError(facErr.message);
+
+    type FacultyRow = {
+      id: string;
+      name: string;
+      university_id: string;
+      universities: { id: string; name: string } | null;
+    };
+    const faculties = (facultyRows ?? []) as unknown as FacultyRow[];
+    if (faculties.length !== requestedFacultyIds.length) {
+      return badRequest('We couldn’t find one of the faculties you picked. Try again.');
+    }
+
+    // Skip faculties already active so users don't double-pay.
+    const { data: alreadyActive } = await admin.rpc('list_unlocked_faculties', {
+      p_user_id: authUser.id,
+    });
+    const activeIds = new Set((alreadyActive ?? []).map((r) => r.faculty_id));
+    const fresh = faculties.filter((f) => !activeIds.has(f.id));
+    if (fresh.length === 0) {
+      return badRequest('You already have access to every faculty you selected.');
+    }
 
     const reference = generateReference('SUB');
     const origin = req.nextUrl.origin;
@@ -78,78 +93,29 @@ export async function POST(req: NextRequest) {
       ? parsed.data.callback_path
       : '/dashboard/subscription/verify';
 
-    const admin = createAdminClient();
-
-    // Skip combos the user already has active — no point double-paying.
-    const { data: alreadyActive } = await admin.rpc('list_unlocked_departments', {
-      p_user_id: authUser.id,
-    });
-    const activeKeys = new Set(
-      (alreadyActive ?? []).map((r) => `${r.school}::${r.department}`),
-    );
-    const fresh = combos.filter((c) => !activeKeys.has(`${c.school}::${c.department}`));
-    if (fresh.length === 0) {
-      return badRequest('You already have active access to every department you selected');
-    }
-
     const freshPricing = priceBundle(parsed.data.plan, fresh.length, isContributor);
     const freshPerRow = paidShareForCombo(parsed.data.plan, fresh.length, isContributor);
 
-    // Resolve denormalised FK ids + faculty name for each combo so the
-    // subscription row carries a full pointer into the new hierarchy.
-    const enriched = await Promise.all(
-      fresh.map(async (c) => {
-        const { data: uni } = await admin
-          .from('universities').select('id').eq('name', c.school).single();
-        let universityId: string | null = uni?.id ?? null;
-        let facultyId: string | null = null;
-        let facultyName: string | null = c.faculty ?? null;
-        let departmentId: string | null = null;
-
-        if (universityId) {
-          // Find the department's faculty by joining through faculties.
-          const { data: facultyRows } = await admin
-            .from('faculties').select('id, name').eq('university_id', universityId);
-          for (const f of facultyRows ?? []) {
-            if (c.faculty && f.name !== c.faculty) continue;
-            const { data: dept } = await admin
-              .from('departments')
-              .select('id')
-              .eq('faculty_id', f.id)
-              .eq('name', c.department)
-              .maybeSingle();
-            if (dept) {
-              facultyId = f.id;
-              facultyName = f.name;
-              departmentId = dept.id;
-              break;
-            }
-          }
-        }
-
-        return {
-          user_id: authUser.id,
-          plan: parsed.data.plan,
-          amount: freshPerRow,
-          currency: 'NGN',
-          reference,
-          status: 'pending' as const,
-          university_id: universityId,
-          faculty_id: facultyId,
-          department_id: departmentId,
-          school: c.school,
-          faculty: facultyName,
-          department: c.department,
-          contributor_discount_applied: isContributor,
-        };
-      }),
-    );
-    const rows = enriched;
+    const rows = fresh.map((f) => ({
+      user_id: authUser.id,
+      plan: parsed.data.plan,
+      amount: freshPerRow,
+      currency: 'NGN',
+      reference,
+      status: 'pending' as const,
+      university_id: f.university_id,
+      faculty_id: f.id,
+      department_id: null,
+      school: f.universities?.name ?? null,
+      faculty: f.name,
+      department: null,
+      contributor_discount_applied: isContributor,
+    }));
 
     const { data: insertedRows, error: insertErr } = await admin
       .from('subscriptions')
       .insert(rows)
-      .select('id, school, department');
+      .select('id, faculty, faculty_id, school');
     if (insertErr) return serverError(insertErr.message);
 
     try {
@@ -162,7 +128,7 @@ export async function POST(req: NextRequest) {
           purpose: 'subscription',
           plan: parsed.data.plan,
           user_id: authUser.id,
-          combo_count: fresh.length,
+          faculty_count: fresh.length,
           contributor_discount: isContributor,
         },
       });
@@ -174,21 +140,23 @@ export async function POST(req: NextRequest) {
 
       return created({
         rows: insertedRows ?? [],
-        pricing: { ...freshPricing, attempted: combos.length, billable: fresh.length },
-        skipped_combos: combos.length - fresh.length,
+        pricing: {
+          ...freshPricing,
+          attempted: requestedFacultyIds.length,
+          billable: fresh.length,
+        },
+        skipped: requestedFacultyIds.length - fresh.length,
         authorization_url: init.authorization_url,
         reference: init.reference,
       });
-    } catch (err) {
+    } catch {
       await admin
         .from('subscriptions')
         .update({ status: 'cancelled' })
         .eq('reference', reference);
-      const msg = err instanceof Error ? err.message : 'Could not start checkout';
-      return serverError(msg);
+      return serverError('We couldn’t start the checkout. Please try again.');
     }
   } catch {
     return serverError();
   }
 }
-

@@ -35,10 +35,9 @@ export async function GET(req: NextRequest) {
     } else if (access.unlocked.length === 0) {
       return ok({ total: 0, allowed_courses: 0 });
     } else {
-      const orPairs = access.unlocked.map(
-        (u) => `and(school.eq."${u.school.replace(/"/g, '\\"')}",department.eq."${u.department.replace(/"/g, '\\"')}")`,
-      );
-      const { data: rows } = await adminClient.from('courses').select('id').or(orPairs.join(','));
+      const facultyIds = access.unlocked.map((u) => u.faculty_id);
+      const { data: rows } = await adminClient
+        .from('courses').select('id').in('faculty_id', facultyIds);
       allowedCourseIds = (rows ?? []).map((r) => r.id);
     }
 

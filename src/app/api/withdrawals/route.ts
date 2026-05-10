@@ -11,6 +11,7 @@ import {
   verifyAccountNumber,
 } from '@/lib/paystack/transfers';
 import { generateReference } from '@/lib/utils/hash';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const MIN_WITHDRAWAL = 1000; // ₦1,000 minimum
 
@@ -18,7 +19,7 @@ const MIN_WITHDRAWAL = 1000; // ₦1,000 minimum
 // Both `account_number` and `bank_account_number` are accepted for compatibility.
 const schema = z
   .object({
-    amount: z.number().min(MIN_WITHDRAWAL, `Minimum withdrawal is ₦${MIN_WITHDRAWAL}`),
+    amount: z.number().min(MIN_WITHDRAWAL, `The minimum withdrawal is ₦${MIN_WITHDRAWAL.toLocaleString()}.`),
     payout_method_id: z.string().uuid().optional(),
     bank_account_number: z.string().length(10).optional(),
     account_number: z.string().length(10).optional(),
@@ -28,7 +29,7 @@ const schema = z
   })
   .refine(
     (v) => v.payout_method_id || ((v.bank_account_number || v.account_number) && v.bank_code),
-    { message: 'Provide a saved payout_method_id or both bank_code + account_number' },
+    { message: 'Choose a saved bank account or enter a new one.' },
   );
 
 // GET /api/withdrawals
@@ -63,14 +64,9 @@ export async function POST(req: NextRequest) {
     const { authUser, profile, error } = await getAuthUser();
     if (error || !authUser || !profile) return unauthorized();
 
-    // Only contributors and admins can withdraw — students earn nothing yet.
-    if (profile.role !== 'contributor' && profile.role !== 'admin') {
-      return badRequest('Only contributors can withdraw earnings');
-    }
-
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const { amount, payout_method_id, save_method, bank_name } = parsed.data;
     const adminSupabase = createAdminClient();
@@ -88,7 +84,7 @@ export async function POST(req: NextRequest) {
         .eq('id', payout_method_id)
         .eq('user_id', authUser.id)
         .single();
-      if (!method) return badRequest('Payout method not found');
+      if (!method) return badRequest('We couldn’t find that saved bank account.');
       bank_code = method.bank_code;
       bank_account_number = method.account_number;
       account_name = method.account_name;
@@ -96,13 +92,23 @@ export async function POST(req: NextRequest) {
       savedMethodId = method.id;
     }
 
-    // Check balance
-    const { data: balance } = await adminSupabase.rpc('get_wallet_balance', {
-      p_user_id: authUser.id,
-    });
+    // Mint any newly-earned reward credits, then compute the balance off the ledger.
+    await adminSupabase.rpc('mint_contributor_rewards', { p_user_id: authUser.id });
 
-    if ((balance ?? 0) < amount) {
-      return badRequest(`Insufficient balance. Available: ₦${balance ?? 0}`);
+    const { data: rows } = await adminSupabase
+      .from('wallet_ledger')
+      .select('amount, type, status')
+      .eq('user_id', authUser.id)
+      .eq('status', 'successful');
+    let balance = 0;
+    for (const r of rows ?? []) {
+      const a = Number(r.amount) || 0;
+      if (r.type === 'credit') balance += a; else balance -= a;
+    }
+    if (balance < amount) {
+      return badRequest(
+        `Not enough in your wallet. You have ₦${balance.toLocaleString('en-NG')}.`,
+      );
     }
 
     // Verify bank account via Paystack if we don't already have a verified name.
@@ -111,7 +117,7 @@ export async function POST(req: NextRequest) {
         const verified = await verifyAccountNumber(bank_account_number, bank_code);
         account_name = verified.account_name;
       } catch {
-        return badRequest('Could not verify bank account. Check account number and bank code.');
+        return badRequest('We couldn’t verify that bank account. Please check the bank and account number.');
       }
     }
 
@@ -126,9 +132,8 @@ export async function POST(req: NextRequest) {
           currency: 'NGN',
         });
         recipient_code = recipient.recipient_code;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to create recipient';
-        return serverError(msg);
+      } catch {
+        return serverError('We couldn’t set up the bank transfer. Please try again.');
       }
     }
 
@@ -209,7 +214,7 @@ export async function POST(req: NextRequest) {
         { ...withdrawal, paystack_transfer_code: transfer.transfer_code },
         'Withdrawal initiated',
       );
-    } catch (err) {
+    } catch {
       // Rollback: mark withdrawal failed, reverse pending debit
       await adminSupabase
         .from('withdrawals')
@@ -221,8 +226,7 @@ export async function POST(req: NextRequest) {
         .update({ status: 'failed' })
         .eq('reference_id', reference);
 
-      const msg = err instanceof Error ? err.message : 'Transfer failed';
-      return serverError(msg);
+      return serverError('We couldn’t start the transfer. Your wallet wasn’t charged.');
     }
   } catch {
     return serverError();

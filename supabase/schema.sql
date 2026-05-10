@@ -169,39 +169,18 @@ CREATE INDEX IF NOT EXISTS idx_contributions_question ON public.question_contrib
 CREATE INDEX IF NOT EXISTS idx_contributions_user     ON public.question_contributions(user_id);
 
 -- ============================================================
--- HIGH-YIELD TAGS — students mark a question as high-yield.
--- Each unique tag adds +0.2 to the contributor weight on that question
--- (computed live in /lib/contributions/rewards.ts).
--- Application code enforces:
---   * tagger has active subscription for the question's department
---   * tagger is not a contributor on the question
+-- ADMIN SETTINGS — single key/value table the app reads at runtime.
+-- Holds the global per-100-questions reward, etc.
 -- ============================================================
-CREATE TABLE IF NOT EXISTS public.high_yield_tags (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  question_id  UUID NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
-  user_id      UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (question_id, user_id)
+CREATE TABLE IF NOT EXISTS public.admin_settings (
+  key         TEXT PRIMARY KEY,
+  value_num   NUMERIC,
+  value_text  TEXT,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by  UUID REFERENCES public.users(id) ON DELETE SET NULL
 );
-CREATE INDEX IF NOT EXISTS idx_high_yield_question ON public.high_yield_tags(question_id);
-CREATE INDEX IF NOT EXISTS idx_high_yield_user     ON public.high_yield_tags(user_id);
-
--- Block a contributor from tagging their own question.
-CREATE OR REPLACE FUNCTION public.assert_high_yield_not_contributor()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM public.question_contributions
-    WHERE question_id = NEW.question_id AND user_id = NEW.user_id
-  ) THEN
-    RAISE EXCEPTION 'Contributors cannot tag their own questions as high yield';
-  END IF;
-  RETURN NEW;
-END;
-$$;
-DROP TRIGGER IF EXISTS high_yield_tags_block_self ON public.high_yield_tags;
-CREATE TRIGGER high_yield_tags_block_self BEFORE INSERT ON public.high_yield_tags
-  FOR EACH ROW EXECUTE FUNCTION public.assert_high_yield_not_contributor();
+INSERT INTO public.admin_settings (key, value_num) VALUES ('reward_per_100_questions', 1000)
+  ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================
 -- UPLOADS — adds level + semester (propagated to extracted questions)
@@ -445,29 +424,15 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user        ON public.subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status      ON public.subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_active ON public.subscriptions(user_id, ends_at) WHERE status = 'active';
-CREATE INDEX IF NOT EXISTS idx_subscriptions_user_dept_active
-  ON public.subscriptions(user_id, school, department, ends_at) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_faculty_active
+  ON public.subscriptions(user_id, faculty_id, ends_at) WHERE status = 'active';
 DROP TRIGGER IF EXISTS subscriptions_updated_at ON public.subscriptions;
 CREATE TRIGGER subscriptions_updated_at BEFORE UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 -- ============================================================
--- REVENUE POOL, DUPLICATES, NOTIFICATIONS, PRACTICE SESSIONS
+-- DUPLICATES, NOTIFICATIONS, PRACTICE SESSIONS
 -- ============================================================
-CREATE TABLE IF NOT EXISTS public.revenue_pool (
-  id                           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  total_revenue                NUMERIC(15,2) NOT NULL DEFAULT 0,
-  contribution_pool_percentage FLOAT NOT NULL DEFAULT 50.0 CHECK (contribution_pool_percentage BETWEEN 0 AND 100),
-  payout_pool_amount           NUMERIC(15,2) GENERATED ALWAYS AS (total_revenue * contribution_pool_percentage / 100) STORED,
-  period_start                 DATE NOT NULL,
-  period_end                   DATE NOT NULL,
-  distributed                  BOOLEAN NOT NULL DEFAULT false,
-  distributed_at               TIMESTAMPTZ,
-  notes                        TEXT,
-  created_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (period_start, period_end)
-);
-
 CREATE TABLE IF NOT EXISTS public.question_duplicates (
   id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   question_id_a    UUID NOT NULL REFERENCES public.questions(id) ON DELETE CASCADE,
@@ -522,20 +487,6 @@ RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS
   SELECT EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('contributor','admin'));
 $$;
 
-CREATE OR REPLACE FUNCTION get_wallet_balance(p_user_id UUID)
-RETURNS NUMERIC LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_balance NUMERIC;
-BEGIN
-  SELECT COALESCE(
-    SUM(CASE WHEN type = 'credit' AND status = 'successful' THEN amount ELSE 0 END) -
-    SUM(CASE WHEN type = 'debit'  AND status = 'successful' THEN amount ELSE 0 END), 0)
-  INTO v_balance
-  FROM public.wallet_ledger
-  WHERE user_id = p_user_id;
-  RETURN v_balance;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION increment_question_views(p_question_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -546,35 +497,34 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.has_active_subscription_for(
-  p_user_id UUID, p_school TEXT, p_department TEXT
+CREATE OR REPLACE FUNCTION public.has_active_subscription_for_faculty(
+  p_user_id UUID, p_faculty_id UUID
 ) RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.subscriptions
     WHERE user_id = p_user_id AND status = 'active' AND ends_at > NOW()
-      AND school = p_school AND department = p_department
+      AND faculty_id = p_faculty_id
   );
 $$;
 
-CREATE OR REPLACE FUNCTION public.list_unlocked_departments(p_user_id UUID)
+CREATE OR REPLACE FUNCTION public.list_unlocked_faculties(p_user_id UUID)
 RETURNS TABLE (
-  id            UUID,
   university_id UUID,
   faculty_id    UUID,
-  department_id UUID,
   school        TEXT,
   faculty       TEXT,
-  department    TEXT,
   plan          subscription_plan,
   starts_at     TIMESTAMPTZ,
   ends_at       TIMESTAMPTZ
 ) LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
-  SELECT id, university_id, faculty_id, department_id,
-         school, faculty, department, plan, starts_at, ends_at
-  FROM public.subscriptions
-  WHERE user_id = p_user_id AND status = 'active' AND ends_at > NOW()
-    AND school IS NOT NULL AND department IS NOT NULL
-  ORDER BY ends_at DESC;
+  SELECT DISTINCT ON (faculty_id)
+         university_id, faculty_id, school, faculty, plan, starts_at, ends_at
+    FROM public.subscriptions
+   WHERE user_id  = p_user_id
+     AND status   = 'active'
+     AND ends_at  > NOW()
+     AND faculty_id IS NOT NULL
+   ORDER BY faculty_id, ends_at DESC;
 $$;
 
 CREATE OR REPLACE FUNCTION public.contributor_question_count(p_user_id UUID)
@@ -588,34 +538,89 @@ RETURNS INTEGER LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS
     AND q.status = 'approved';
 $$;
 
--- Whether a user is allowed to tag a question high-yield right now.
--- Rules: not the question's contributor, AND has an active subscription
--- for the question's department.
-CREATE OR REPLACE FUNCTION public.can_high_yield_tag(p_user_id UUID, p_question_id UUID)
-RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.questions q
-    JOIN public.courses c ON c.id = q.course_id
-    JOIN public.subscriptions s ON s.user_id = p_user_id
-       AND s.status = 'active' AND s.ends_at > NOW()
-       AND s.school = c.school AND s.department = c.department
-    WHERE q.id = p_question_id
-  )
-  AND NOT EXISTS (
-    SELECT 1 FROM public.question_contributions
-    WHERE question_id = p_question_id AND user_id = p_user_id
-  );
+-- Mint contribution_reward credits for any newly-crossed 100-question buckets.
+-- Each bucket is locked at the rate in effect when minted (rate may change later
+-- in admin_settings; past credits are never re-priced).
+CREATE OR REPLACE FUNCTION public.mint_contributor_rewards(p_user_id UUID)
+RETURNS INTEGER LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public AS $$
+DECLARE
+  approved_count   INTEGER;
+  target_buckets   INTEGER;
+  existing_buckets INTEGER;
+  rate             NUMERIC;
+  i                INTEGER;
+  minted           INTEGER := 0;
+BEGIN
+  SELECT COUNT(DISTINCT q.id) INTO approved_count
+  FROM public.question_contributions qc
+  JOIN public.questions q ON q.id = qc.question_id
+  WHERE qc.user_id = p_user_id
+    AND qc.contribution_type IN ('upload','extraction')
+    AND q.status = 'approved'
+    AND q.is_deleted = false;
+
+  target_buckets := approved_count / 100;
+  IF target_buckets = 0 THEN RETURN 0; END IF;
+
+  SELECT COALESCE(MAX((metadata->>'bucket')::INTEGER), 0)
+  INTO existing_buckets
+  FROM public.wallet_ledger
+  WHERE user_id = p_user_id
+    AND reason  = 'contribution_reward'
+    AND type    = 'credit';
+
+  IF target_buckets <= existing_buckets THEN RETURN 0; END IF;
+
+  SELECT value_num INTO rate
+  FROM public.admin_settings WHERE key = 'reward_per_100_questions';
+  IF rate IS NULL OR rate <= 0 THEN RETURN 0; END IF;
+
+  FOR i IN (existing_buckets + 1)..target_buckets LOOP
+    INSERT INTO public.wallet_ledger
+      (user_id, amount, currency, type, status, reason, metadata)
+    VALUES
+      (p_user_id, rate, 'NGN', 'credit', 'successful', 'contribution_reward',
+       jsonb_build_object('bucket', i, 'rate', rate));
+    minted := minted + 1;
+  END LOOP;
+
+  RETURN minted;
+END;
 $$;
+
+CREATE OR REPLACE FUNCTION public.questions_mint_rewards_on_approval()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+DECLARE u UUID;
+BEGIN
+  IF NEW.status = 'approved' AND NEW.is_deleted = false
+     AND (TG_OP = 'INSERT'
+          OR OLD.status     IS DISTINCT FROM NEW.status
+          OR OLD.is_deleted IS DISTINCT FROM NEW.is_deleted) THEN
+    FOR u IN
+      SELECT DISTINCT user_id
+      FROM public.question_contributions
+      WHERE question_id = NEW.id
+        AND contribution_type IN ('upload','extraction')
+    LOOP
+      PERFORM public.mint_contributor_rewards(u);
+    END LOOP;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS questions_mint_on_approval ON public.questions;
+CREATE TRIGGER questions_mint_on_approval
+  AFTER INSERT OR UPDATE ON public.questions
+  FOR EACH ROW EXECUTE FUNCTION public.questions_mint_rewards_on_approval();
 
 GRANT EXECUTE ON FUNCTION public.is_admin()                                   TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.is_contributor_or_admin()                    TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION get_wallet_balance(UUID)                            TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION increment_question_views(UUID)                      TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.has_active_subscription_for(UUID, TEXT, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.list_unlocked_departments(UUID)              TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.has_active_subscription_for_faculty(UUID, UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.list_unlocked_faculties(UUID)                   TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.contributor_question_count(UUID)             TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.can_high_yield_tag(UUID, UUID)               TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.mint_contributor_rewards(UUID)               TO authenticated, service_role;
 
 -- ============================================================
 -- ROW LEVEL SECURITY
@@ -627,7 +632,6 @@ ALTER TABLE public.departments            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.courses                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.questions              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.question_contributions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.high_yield_tags        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.uploads                ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.upload_extractions     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.question_analytics     ENABLE ROW LEVEL SECURITY;
@@ -639,7 +643,7 @@ ALTER TABLE public.wallet_ledger          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payout_methods         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.withdrawals            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.revenue_pool           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_settings         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.question_duplicates    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.practice_sessions      ENABLE ROW LEVEL SECURITY;
@@ -699,14 +703,10 @@ CREATE POLICY "contributions_select_own"   ON public.question_contributions FOR 
 CREATE POLICY "contributions_select_admin" ON public.question_contributions FOR SELECT USING (public.is_admin());
 CREATE POLICY "contributions_insert_own"   ON public.question_contributions FOR INSERT WITH CHECK (user_id = auth.uid());
 
-DROP POLICY IF EXISTS "high_yield_select_all" ON public.high_yield_tags;
-DROP POLICY IF EXISTS "high_yield_insert_own" ON public.high_yield_tags;
-DROP POLICY IF EXISTS "high_yield_delete_own" ON public.high_yield_tags;
-DROP POLICY IF EXISTS "high_yield_admin_all"  ON public.high_yield_tags;
-CREATE POLICY "high_yield_select_all" ON public.high_yield_tags FOR SELECT USING (true);
-CREATE POLICY "high_yield_insert_own" ON public.high_yield_tags FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "high_yield_delete_own" ON public.high_yield_tags FOR DELETE USING (user_id = auth.uid());
-CREATE POLICY "high_yield_admin_all"  ON public.high_yield_tags FOR ALL    USING (public.is_admin()) WITH CHECK (public.is_admin());
+DROP POLICY IF EXISTS "admin_settings_select_all"  ON public.admin_settings;
+DROP POLICY IF EXISTS "admin_settings_admin_write" ON public.admin_settings;
+CREATE POLICY "admin_settings_select_all"  ON public.admin_settings FOR SELECT USING (true);
+CREATE POLICY "admin_settings_admin_write" ON public.admin_settings FOR ALL USING (public.is_admin()) WITH CHECK (public.is_admin());
 
 DROP POLICY IF EXISTS "uploads_select_own" ON public.uploads;
 DROP POLICY IF EXISTS "uploads_insert_own" ON public.uploads;
@@ -793,12 +793,10 @@ DROP POLICY IF EXISTS "admin_all_subscriptions"  ON public.subscriptions;
 CREATE POLICY "subscriptions_select_own" ON public.subscriptions FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "admin_all_subscriptions"  ON public.subscriptions FOR ALL    USING (public.is_admin());
 
-DROP POLICY IF EXISTS "admin_all_revenue_pool"   ON public.revenue_pool;
 DROP POLICY IF EXISTS "admin_all_duplicates"     ON public.question_duplicates;
 DROP POLICY IF EXISTS "notifications_select_own" ON public.notifications;
 DROP POLICY IF EXISTS "notifications_update_own" ON public.notifications;
 DROP POLICY IF EXISTS "admin_all_notifications"  ON public.notifications;
-CREATE POLICY "admin_all_revenue_pool"   ON public.revenue_pool       FOR ALL USING (public.is_admin());
 CREATE POLICY "admin_all_duplicates"     ON public.question_duplicates FOR ALL USING (public.is_admin());
 CREATE POLICY "notifications_select_own" ON public.notifications FOR SELECT USING (user_id = auth.uid());
 CREATE POLICY "notifications_update_own" ON public.notifications FOR UPDATE USING (user_id = auth.uid());
@@ -824,7 +822,7 @@ GRANT SELECT ON public.departments          TO anon, authenticated;
 GRANT SELECT ON public.courses              TO anon, authenticated;
 GRANT SELECT ON public.questions            TO anon, authenticated;
 GRANT SELECT ON public.question_analytics   TO anon, authenticated;
-GRANT SELECT ON public.high_yield_tags      TO anon, authenticated;
+GRANT SELECT ON public.admin_settings       TO anon, authenticated;
 GRANT SELECT ON public.question_comments    TO anon, authenticated;
 GRANT SELECT ON public.comment_upvotes      TO anon, authenticated;
 
@@ -832,7 +830,6 @@ GRANT SELECT, INSERT, UPDATE        ON public.users                  TO authenti
 GRANT INSERT, UPDATE                ON public.courses                TO authenticated;
 GRANT INSERT, UPDATE, DELETE        ON public.questions              TO authenticated;
 GRANT SELECT, INSERT                ON public.question_contributions TO authenticated;
-GRANT INSERT, DELETE                ON public.high_yield_tags        TO authenticated;
 GRANT SELECT, INSERT                ON public.uploads                TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.upload_extractions    TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.question_attempts     TO authenticated;
@@ -844,7 +841,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.payout_methods        TO authenti
 GRANT SELECT, INSERT                ON public.withdrawals            TO authenticated;
 GRANT SELECT                        ON public.subscriptions          TO authenticated;
 GRANT SELECT, INSERT, UPDATE        ON public.notifications          TO authenticated;
-GRANT SELECT                        ON public.revenue_pool           TO authenticated;
 GRANT SELECT                        ON public.question_duplicates    TO authenticated;
 GRANT SELECT, INSERT, DELETE        ON public.practice_sessions      TO authenticated;
 

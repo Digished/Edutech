@@ -7,6 +7,7 @@ import { canRead, loadAccessSummary } from '@/lib/access/gate';
 import {
   ok, badRequest, forbidden, unauthorized, notFound, serverError,
 } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const updateSchema = z.object({
   question_text: z.string().min(5).optional(),
@@ -28,7 +29,7 @@ export async function GET(
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('questions')
-      .select(`*, courses(name, school, department, code), question_analytics(views_count, last_viewed_at)`)
+      .select(`*, courses(name, school, department, faculty_id, code), question_analytics(views_count, last_viewed_at)`)
       .eq('id', id)
       .eq('is_deleted', false)
       .single();
@@ -36,9 +37,9 @@ export async function GET(
     if (error || !data) return notFound('Question not found');
 
     const access = await loadAccessSummary(profile);
-    const courseRow = (data as unknown as { courses: { school: string | null; department: string | null } | null }).courses;
-    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
-      return forbidden('Subscribe to unlock this department');
+    const courseRow = (data as unknown as { courses: { faculty_id: string | null } | null }).courses;
+    if (!canRead(access, courseRow?.faculty_id ?? null)) {
+      return forbidden('Subscribe to this faculty to unlock the question.');
     }
 
     await createAdminClient().rpc('increment_question_views', { p_question_id: id });
@@ -59,7 +60,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const adminSupabase = createAdminClient();
 
