@@ -28,7 +28,7 @@ const schema = z.object({
   semester: z.union([z.literal(1), z.literal(2), z.literal(3)]).nullable().optional(),
   total_questions: z.number().int().min(1),
   duration_ms: z.number().int().min(0).nullable().optional(),
-  details: z.array(detailSchema).max(200),
+  details: z.array(detailSchema).max(2000),
 });
 
 // GET /api/practice-sessions — list own sessions, newest first

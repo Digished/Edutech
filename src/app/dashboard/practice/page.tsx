@@ -12,6 +12,7 @@ interface Course {
   id: string;
   name: string;
   school: string;
+  faculty: string | null;
   department: string;
   code: string | null;
   faculty_id: string;
@@ -30,7 +31,6 @@ interface Status {
   unlocked_faculties: UnlockedFaculty[];
 }
 
-const MAX_COUNT = 50;
 const DEFAULT_COUNT = 10;
 
 export default function PracticeSetupPage() {
@@ -40,6 +40,7 @@ export default function PracticeSetupPage() {
   const [statusLoading, setStatusLoading] = useState(true);
 
   const [school, setSchool] = useState('');
+  const [facultyId, setFacultyId] = useState('');
   const [department, setDepartment] = useState('');
   const [level, setLevel] = useState<number | ''>('');
   const [semester, setSemester] = useState<number | ''>('');
@@ -91,20 +92,47 @@ export default function PracticeSetupPage() {
     return allCourses.filter((c) => set.has(c.faculty_id));
   }, [allCourses, isAdmin, unlocked]);
 
+  // Schools/faculties: for a non-admin we want the dropdowns to show what
+  // they've actually unlocked (even if no courses exist there yet) so they
+  // never see an empty filter list. Admins see everything in the catalog.
   const schools = useMemo(() => {
-    return Array.from(new Set(accessibleCourses.map((c) => c.school))).sort();
-  }, [accessibleCourses]);
+    if (isAdmin) {
+      return Array.from(new Set(allCourses.map((c) => c.school).filter(Boolean))).sort();
+    }
+    return Array.from(new Set(unlocked.map((u) => u.school).filter((s): s is string => !!s))).sort();
+  }, [isAdmin, allCourses, unlocked]);
+
+  const facultyOptions = useMemo(() => {
+    if (isAdmin) {
+      const seen = new Map<string, string>();
+      for (const c of allCourses) {
+        if (school && c.school !== school) continue;
+        if (c.faculty_id && !seen.has(c.faculty_id)) seen.set(c.faculty_id, c.faculty ?? '—');
+      }
+      return Array.from(seen.entries()).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    return unlocked
+      .filter((u) => !school || u.school === school)
+      .map((u) => ({ id: u.faculty_id, name: u.faculty ?? '—' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [isAdmin, allCourses, unlocked, school]);
+
   const departments = useMemo(() => {
-    if (!school) return [] as string[];
-    return Array.from(new Set(accessibleCourses.filter((c) => c.school === school).map((c) => c.department))).sort();
-  }, [accessibleCourses, school]);
+    return Array.from(new Set(
+      accessibleCourses
+        .filter((c) => (school ? c.school === school : true))
+        .filter((c) => (facultyId ? c.faculty_id === facultyId : true))
+        .map((c) => c.department),
+    )).sort();
+  }, [accessibleCourses, school, facultyId]);
 
   const filteredCourses = useMemo(() => {
     return accessibleCourses
       .filter((c) => (school ? c.school === school : true))
+      .filter((c) => (facultyId ? c.faculty_id === facultyId : true))
       .filter((c) => (department ? c.department === department : true))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [accessibleCourses, school, department]);
+  }, [accessibleCourses, school, facultyId, department]);
 
   // Drop picks that no longer match the filters.
   useEffect(() => {
@@ -136,15 +164,15 @@ export default function PracticeSetupPage() {
   }, [pickedCourseIds, questionType, level, semester, statusLoading]);
 
   const cap = available ?? 0;
-  const requestedCount = Math.max(0, Math.min(MAX_COUNT, parseInt(countStr || '0', 10) || 0));
+  const requestedCount = Math.max(0, parseInt(countStr || '0', 10) || 0);
+  // The only ceiling is how many questions are actually available for the
+  // current filters — no hard MAX cap.
   const effectiveCount = Math.min(requestedCount, cap);
 
   function handleCountChange(v: string) {
     // Strip leading zeros and any non-digit so the field can never sit at "0…".
     const digits = v.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
-    if (digits === '') { setCountStr(''); return; }
-    const n = parseInt(digits, 10);
-    setCountStr(String(Math.min(n, MAX_COUNT)));
+    setCountStr(digits);
   }
 
   function toggleCourse(id: string) {
@@ -299,15 +327,36 @@ export default function PracticeSetupPage() {
                 <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">University (optional filter)</label>
                 <select
                   value={school}
-                  onChange={(e) => { setSchool(e.target.value); setDepartment(''); }}
+                  onChange={(e) => { setSchool(e.target.value); setFacultyId(''); setDepartment(''); }}
                   className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 >
-                  <option value="">Any unlocked university</option>
+                  <option value="">{isAdmin ? 'Any university' : 'Any unlocked university'}</option>
                   {schools.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
+                {schools.length === 0 && (
+                  <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    {isAdmin
+                      ? 'No universities have any courses yet.'
+                      : 'You haven’t unlocked any faculties yet.'}
+                  </p>
+                )}
               </div>
 
-              {school && (
+              {facultyOptions.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Faculty (optional filter)</label>
+                  <select
+                    value={facultyId}
+                    onChange={(e) => { setFacultyId(e.target.value); setDepartment(''); }}
+                    className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="">{isAdmin ? 'Any faculty' : 'Any unlocked faculty'}</option>
+                    {facultyOptions.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {departments.length > 0 && (
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">Department (optional filter)</label>
                   <select
@@ -315,7 +364,7 @@ export default function PracticeSetupPage() {
                     onChange={(e) => setDepartment(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   >
-                    <option value="">Any unlocked department</option>
+                    <option value="">Any department</option>
                     {departments.map((d) => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
@@ -432,7 +481,7 @@ export default function PracticeSetupPage() {
                   <span className="text-xs text-zinc-500 dark:text-zinc-400">
                     {availableLoading
                       ? 'Counting available questions…'
-                      : `${cap.toLocaleString()} available · max ${MAX_COUNT}`}
+                      : `${cap.toLocaleString()} available`}
                   </span>
                 </div>
                 {requestedCount > cap && cap > 0 && (
