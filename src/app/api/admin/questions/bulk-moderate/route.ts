@@ -4,6 +4,9 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
 import { ok, badRequest, unauthorized, serverError } from '@/lib/utils/response';
 import { friendlyZodError } from '@/lib/utils/friendly-errors';
+import type { Database } from '@/types/supabase';
+
+type NotificationInsert = Database['public']['Tables']['notifications']['Insert'];
 
 const schema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(500),
@@ -40,13 +43,7 @@ export async function POST(req: NextRequest) {
     }[];
 
     const statusText = status === 'approved' ? 'Approved' : 'Rejected';
-    const notifications: {
-      user_id: string;
-      title: string;
-      body: string;
-      type: string;
-      metadata: Record<string, unknown>;
-    }[] = [];
+    const notifications: NotificationInsert[] = [];
     for (const row of rows) {
       for (const c of row.question_contributions ?? []) {
         notifications.push({
