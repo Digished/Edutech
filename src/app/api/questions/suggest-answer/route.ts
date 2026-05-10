@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireRole } from '@/lib/utils/auth';
 import { suggestAnswer } from '@/lib/ocr/answers';
 import { ok, badRequest, unauthorized, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   question_text: z.string().min(5),
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const { question_text, question_type, options } = parsed.data;
     if (question_type === 'mcq' && (!options || Object.keys(options).length < 2)) {

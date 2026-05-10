@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/utils/auth';
 import { gradeTheoryAnswer } from '@/lib/ocr/answers';
 import { canRead, loadAccessSummary } from '@/lib/access/gate';
 import { ok, badRequest, forbidden, unauthorized, notFound, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   question_id: z.string().uuid(),
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const supabase = await createClient();
     const { data: question } = await supabase

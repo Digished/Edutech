@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { hashQuestionText } from '@/lib/utils/hash';
 import { requireRole } from '@/lib/utils/auth';
 import { ok, badRequest, unauthorized, forbidden, notFound, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 import type { Database } from '@/types/supabase';
 
 type ExtractionUpdate = Database['public']['Tables']['upload_extractions']['Update'];
@@ -30,7 +31,7 @@ export async function PATCH(
     const { id, extractionId } = await params;
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const supabase = await createClient();
     const { data: upload } = await supabase

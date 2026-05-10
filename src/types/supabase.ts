@@ -592,36 +592,26 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
-      revenue_pool: {
+      admin_settings: {
         Row: {
-          id: string;
-          total_revenue: number;
-          contribution_pool_percentage: number;
-          payout_pool_amount: number;
-          period_start: string;
-          period_end: string;
-          distributed: boolean;
-          distributed_at: string | null;
-          notes: string | null;
-          created_at: string;
+          key: string;
+          value_num: number | null;
+          value_text: string | null;
+          updated_at: string;
+          updated_by: string | null;
         };
         Insert: {
-          id?: string;
-          total_revenue: number;
-          contribution_pool_percentage?: number;
-          period_start: string;
-          period_end: string;
-          distributed?: boolean;
-          distributed_at?: string | null;
-          notes?: string | null;
-          created_at?: string;
+          key: string;
+          value_num?: number | null;
+          value_text?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
         };
         Update: {
-          distributed?: boolean;
-          distributed_at?: string | null;
-          notes?: string | null;
-          total_revenue?: number;
-          contribution_pool_percentage?: number;
+          value_num?: number | null;
+          value_text?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
         };
         Relationships: EmptyRelationships;
       };
@@ -772,33 +762,15 @@ export interface Database {
         };
         Relationships: EmptyRelationships;
       };
-      high_yield_tags: {
-        Row: {
-          id: string;
-          question_id: string;
-          user_id: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          question_id: string;
-          user_id: string;
-          created_at?: string;
-        };
-        Update: {
-          created_at?: string;
-        };
-        Relationships: EmptyRelationships;
-      };
     };
     Functions: {
-      get_wallet_balance: {
-        Args: { p_user_id: string };
-        Returns: number;
-      };
       increment_question_views: {
         Args: { p_question_id: string };
         Returns: undefined;
+      };
+      mint_contributor_rewards: {
+        Args: { p_user_id: string };
+        Returns: number;
       };
       has_active_subscription_for: {
         Args: { p_user_id: string; p_school: string; p_department: string };
@@ -822,10 +794,6 @@ export interface Database {
       contributor_question_count: {
         Args: { p_user_id: string };
         Returns: number;
-      };
-      can_high_yield_tag: {
-        Args: { p_user_id: string; p_question_id: string };
-        Returns: boolean;
       };
     };
     Enums: Record<string, never>;

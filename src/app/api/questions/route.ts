@@ -7,6 +7,7 @@ import { loadAccessSummary } from '@/lib/access/gate';
 import {
   created, badRequest, unauthorized, serverError, paginated,
 } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 import { getPagination } from '@/lib/utils/pagination';
 import { hashQuestionText } from '@/lib/utils/hash';
 import { detectDuplicates, findDuplicateMatch } from '@/lib/dedup/similarity';
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const { course_id, question_text, question_type, options, correct_answer, year, level, semester, image_urls } = parsed.data;
     if (question_type === 'mcq' && (!options || Object.keys(options).length < 2)) {

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { ok, badRequest, unauthorized, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   email: z.string().email(),
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const { email, password } = parsed.data;
     const supabase = await createClient();

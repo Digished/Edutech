@@ -7,6 +7,7 @@ import { canRead, loadAccessSummary } from '@/lib/access/gate';
 import {
   ok, badRequest, forbidden, unauthorized, notFound, serverError,
 } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const updateSchema = z.object({
   question_text: z.string().min(5).optional(),
@@ -59,7 +60,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const adminSupabase = createAdminClient();
 

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { requireRole } from '@/lib/utils/auth';
 import { gradeTheoryAnswer } from '@/lib/ocr/answers';
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   answer: z.string().min(1).max(10_000),
@@ -45,7 +46,7 @@ export async function POST(
     const { id } = await params;
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const supabase = await createClient();
     const { data: question } = await supabase

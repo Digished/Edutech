@@ -35,7 +35,7 @@ const SECTIONS: { title: string; body: React.ReactNode }[] = [
     ),
   },
   {
-    title: '3. Contributions and revenue share',
+    title: '3. Contributions and contributor rewards',
     body: (
       <>
         <p>
@@ -45,9 +45,10 @@ const SECTIONS: { title: string; body: React.ReactNode }[] = [
           rights.
         </p>
         <p>
-          Approved contributions earn you a share of the monthly revenue pool. Earnings are credited to your
-          Examspace wallet and can be withdrawn to a Nigerian bank account once you reach the minimum
-          withdrawal amount shown on your wallet page.
+          For every 100 of your questions that are approved and not removed, your Examspace wallet is
+          credited with the contributor reward shown on the wallet page. The reward amount can change
+          from time to time; new buckets are credited at whatever the current rate is. Funds can be
+          withdrawn to a Nigerian bank account once you reach the minimum shown on your wallet page.
         </p>
       </>
     ),

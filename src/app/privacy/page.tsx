@@ -30,9 +30,10 @@ const SECTIONS: { title: string; body: React.ReactNode }[] = [
     body: (
       <>
         <p>
-          Your information is used to give you access to the question bank, to track contributions for
-          revenue sharing, to grade your practice exams, and to communicate important account or payment
-          events with you. We do not sell your personal data to third parties.
+          Your information is used to give you access to the question bank, to track approved
+          contributions for contributor payouts, to grade your practice exams, and to communicate
+          important account or payment events with you. We do not sell your personal data to third
+          parties.
         </p>
       </>
     ),

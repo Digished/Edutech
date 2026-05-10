@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthUser } from '@/lib/utils/auth';
 import { ok, badRequest, unauthorized, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   full_name: z.string().min(1).optional(),
@@ -17,7 +18,7 @@ export async function PATCH(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const supabase = await createClient();
     const { data, error: updateError } = await supabase

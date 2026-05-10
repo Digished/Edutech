@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { getAuthUser, requireRole } from '@/lib/utils/auth';
 import { created, badRequest, unauthorized, notFound, serverError, paginated } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 import { getPagination } from '@/lib/utils/pagination';
 
 interface RawComment {
@@ -133,7 +134,7 @@ export async function POST(
     const { id } = await params;
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const supabase = await createClient();
     const { data: question } = await supabase

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/utils/auth';
 import { created, badRequest, unauthorized, serverError, paginated } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 import { getPagination } from '@/lib/utils/pagination';
 
 const schema = z.object({
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const supabase = await createClient();
     const { data, error: dbError } = await supabase

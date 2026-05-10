@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/utils/auth';
 import { verifyTransaction } from '@/lib/paystack/charges';
 import { planEndDate, SUBSCRIPTION_PLANS } from '@/lib/subscriptions/plans';
 import { ok, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   reference: z.string().min(5),
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const admin = createAdminClient();
     const { data: rows } = await admin

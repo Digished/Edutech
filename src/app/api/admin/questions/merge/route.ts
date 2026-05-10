@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireRole } from '@/lib/utils/auth';
 import { mergeQuestions } from '@/lib/dedup/similarity';
 import { ok, badRequest, unauthorized, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const schema = z.object({
   keep_id: z.string().uuid(),
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     if (parsed.data.keep_id === parsed.data.remove_id)
       return badRequest('keep_id and remove_id must be different');

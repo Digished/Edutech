@@ -4,11 +4,12 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getAuthUser } from '@/lib/utils/auth';
 import { verifyAccountNumber, createTransferRecipient } from '@/lib/paystack/transfers';
 import { ok, created, badRequest, unauthorized, notFound, serverError } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 
 const upsertSchema = z.object({
   bank_code: z.string().min(2),
   bank_name: z.string().optional(),
-  account_number: z.string().regex(/^\d{10}$/, 'Account number must be 10 digits'),
+  account_number: z.string().regex(/^\d{10}$/, 'Please enter a valid 10-digit account number.'),
   set_default: z.boolean().optional(),
 });
 
@@ -40,9 +41,9 @@ export async function POST(req: NextRequest) {
     const { authUser, error } = await getAuthUser();
     if (error || !authUser) return unauthorized();
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const parsed = upsertSchema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     const { bank_code, account_number, bank_name, set_default } = parsed.data;
 
@@ -50,9 +51,8 @@ export async function POST(req: NextRequest) {
     try {
       const verified = await verifyAccountNumber(account_number, bank_code);
       account_name = verified.account_name;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not verify account';
-      return badRequest(msg);
+    } catch {
+      return badRequest('We couldn’t verify that account. Please check the bank and account number.');
     }
 
     let recipient_code: string | null = null;
@@ -109,7 +109,7 @@ export async function DELETE(req: NextRequest) {
     if (error || !authUser) return unauthorized();
 
     const id = req.nextUrl.searchParams.get('id');
-    if (!id) return badRequest('id is required');
+    if (!id) return badRequest('Tell us which bank account to remove.');
 
     const admin = createAdminClient();
     const { data: existing } = await admin
@@ -118,7 +118,7 @@ export async function DELETE(req: NextRequest) {
       .eq('id', id)
       .eq('user_id', authUser.id)
       .single();
-    if (!existing) return notFound('Payout method not found');
+    if (!existing) return notFound('That bank account is no longer on file.');
 
     await admin.from('payout_methods').delete().eq('id', id);
     return ok(null, 'Removed');

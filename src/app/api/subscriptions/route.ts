@@ -8,6 +8,7 @@ import { paidShareForCombo, priceBundle } from '@/lib/subscriptions/plans';
 import {
   created, badRequest, unauthorized, serverError, paginated,
 } from '@/lib/utils/response';
+import { friendlyZodError } from '@/lib/utils/friendly-errors';
 import { getPagination } from '@/lib/utils/pagination';
 
 const comboSchema = z.object({
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const parsed = schema.safeParse(body);
-    if (!parsed.success) return badRequest(parsed.error.issues[0].message);
+    if (!parsed.success) return badRequest(friendlyZodError(parsed.error));
 
     // Dedup combos within a single checkout.
     const seen = new Set<string>();
