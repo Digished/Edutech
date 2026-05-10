@@ -17,6 +17,10 @@ interface Question {
   year: number | null;
   status: string;
   created_at: string;
+  group_id: string | null;
+  part_label: string | null;
+  position: number | null;
+  group: { id: string; stem: string; stem_image_urls: string[] | null } | null;
   courses: { name: string; school: string; department: string } | null;
   question_contributions: Contributor[];
 }
@@ -259,13 +263,58 @@ export default function AdminQuestionsPage() {
             </div>
           </div>
 
-          {questions.map((q) => {
+          {questions.map((q, idx) => {
             const isPublished = q.status === 'approved';
             const isSelected = selected.has(q.id);
+            const prev = idx > 0 ? questions[idx - 1] : null;
+            const startsGroup =
+              !!q.group_id && q.group && (!prev || prev.group_id !== q.group_id);
+
+            // Bulk-select / bulk-action affordance for an entire group: tick
+            // all sibling parts that are currently visible on the page.
+            function selectWholeGroup() {
+              if (!q.group_id) return;
+              setSelected((prevSel) => {
+                const next = new Set(prevSel);
+                for (const sib of questions) {
+                  if (sib.group_id === q.group_id) next.add(sib.id);
+                }
+                return next;
+              });
+            }
+
             return (
-            <div key={q.id} className={`bg-white dark:bg-zinc-900 rounded-xl border p-5 transition-colors ${
+            <div key={q.id}>
+              {startsGroup && q.group && (
+                <div className="rounded-t-xl border border-b-0 border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      Multi-part question · {questions.filter((x) => x.group_id === q.group_id).length} parts
+                    </div>
+                    <button
+                      type="button"
+                      onClick={selectWholeGroup}
+                      className="text-[11px] text-amber-700 dark:text-amber-400 hover:underline"
+                    >
+                      Select all parts
+                    </button>
+                  </div>
+                  <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+                    {q.group.stem}
+                  </p>
+                  {Array.isArray(q.group.stem_image_urls) && q.group.stem_image_urls.length > 0 && (
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {q.group.stem_image_urls.map((url, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={`${url}-${i}`} src={url} alt="" className="w-full h-auto max-h-48 object-contain rounded-md border border-amber-200 dark:border-amber-900 bg-white" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            <div className={`bg-white dark:bg-zinc-900 border p-5 transition-colors ${
               isSelected ? 'border-green-400 dark:border-green-700' : 'border-zinc-200 dark:border-zinc-800'
-            }`}>
+            } ${q.group_id ? 'rounded-none' : 'rounded-xl'}`}>
               <div className="flex items-start gap-3 mb-3">
                 <input
                   type="checkbox"
@@ -273,9 +322,16 @@ export default function AdminQuestionsPage() {
                   onChange={() => toggleSelect(q.id)}
                   className="mt-1 accent-green-600 shrink-0"
                 />
-                <p className="text-sm font-medium text-zinc-900 dark:text-white leading-relaxed flex-1">
-                  {q.question_text}
-                </p>
+                <div className="flex-1">
+                  {q.part_label && (
+                    <span className="inline-block text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 mr-2 align-middle">
+                      Part {q.part_label}
+                    </span>
+                  )}
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white leading-relaxed inline">
+                    {q.question_text}
+                  </p>
+                </div>
               </div>
 
               {q.options && (
@@ -407,6 +463,7 @@ export default function AdminQuestionsPage() {
                   )}
                 </div>
               )}
+            </div>
             </div>
             );
           })}

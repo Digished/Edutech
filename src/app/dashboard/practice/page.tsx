@@ -188,37 +188,69 @@ export default function PracticeSetupPage() {
     if (effectiveCount < 1) { setError('Pick at least one question.'); return; }
     setStarting(true);
     try {
-      const params = new URLSearchParams({ limit: String(effectiveCount) });
+      // Pull a generous over-fetch so groups have room to fill in fully, and
+      // ask the API to expand any partial groups (group_complete=1) so every
+      // sub-part of a returned multi-part question is included.
+      const overFetch = Math.max(effectiveCount * 3, 50);
+      const params = new URLSearchParams({ limit: String(overFetch), group_complete: '1' });
       if (pickedCourseIds.length === 1) params.set('course_id', pickedCourseIds[0]);
       if (questionType !== 'all') params.set('question_type', questionType);
       if (level)    params.set('level', String(level));
       if (semester) params.set('semester', String(semester));
-      const res = await fetch(`/api/questions?${params}&page=1`);
-      const json = await res.json();
-      let ids: string[] = (json.data ?? []).map((q: { id: string }) => q.id);
+
+      type QRow = { id: string; group_id: string | null; part_label: string | null; position: number | null };
+      let rows: QRow[] = [];
       if (pickedCourseIds.length > 1) {
-        // Multi-course: pull from each selected course and merge.
-        const merged: string[] = [];
+        const merged = new Map<string, QRow>();
         for (const cid of pickedCourseIds) {
-          const p2 = new URLSearchParams({ limit: String(effectiveCount), course_id: cid });
-          if (questionType !== 'all') p2.set('question_type', questionType);
-          if (level)    p2.set('level', String(level));
-          if (semester) p2.set('semester', String(semester));
+          const p2 = new URLSearchParams(params);
+          p2.set('course_id', cid);
           const r = await fetch(`/api/questions?${p2}&page=1`);
           if (r.ok) {
             const jj = await r.json();
-            for (const q of jj.data ?? []) merged.push(q.id);
+            for (const q of (jj.data ?? []) as QRow[]) merged.set(q.id, q);
           }
         }
-        ids = Array.from(new Set(merged));
+        rows = Array.from(merged.values());
+      } else {
+        const res = await fetch(`/api/questions?${params}&page=1`);
+        const json = await res.json();
+        rows = (json.data ?? []) as QRow[];
       }
-      if (ids.length === 0) { setError('No questions match these filters.'); return; }
-      // Shuffle and trim.
-      for (let i = ids.length - 1; i > 0; i--) {
+      if (rows.length === 0) { setError('No questions match these filters.'); return; }
+
+      // Build "units" — a unit is either one standalone question or all the
+      // sub-parts of one group, ordered by position so they read in the right
+      // sequence. Shuffle units, then accumulate until we hit the requested
+      // count. Never split a group across the boundary; allow a slight
+      // overshoot to keep grouped parts together.
+      const groups = new Map<string, QRow[]>();
+      const standalones: QRow[] = [];
+      for (const r of rows) {
+        if (r.group_id) {
+          const arr = groups.get(r.group_id) ?? [];
+          arr.push(r);
+          groups.set(r.group_id, arr);
+        } else {
+          standalones.push(r);
+        }
+      }
+      const units: string[][] = [];
+      for (const arr of groups.values()) {
+        arr.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+        units.push(arr.map((q) => q.id));
+      }
+      for (const q of standalones) units.push([q.id]);
+      // Shuffle units in place.
+      for (let i = units.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [ids[i], ids[j]] = [ids[j], ids[i]];
+        [units[i], units[j]] = [units[j], units[i]];
       }
-      ids = ids.slice(0, effectiveCount);
+      const ids: string[] = [];
+      for (const u of units) {
+        if (ids.length >= effectiveCount) break;
+        ids.push(...u);
+      }
 
       const session = {
         ids,
