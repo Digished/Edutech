@@ -64,13 +64,14 @@ export async function GET(req: NextRequest) {
     // by course_id. Cleaner than trying to do multi-column IN over a join.
     let allowedCourseIds: string[] | null = null;
     if (!access.hasFullAccess) {
-      const orPairs = access.unlocked.map(
-        (u) => `and(school.eq."${escapeFilter(u.school)}",department.eq."${escapeFilter(u.department)}")`,
-      );
+      const facultyIds = access.unlocked.map((u) => u.faculty_id);
+      if (facultyIds.length === 0) {
+        return paginated([], 0, 1, limit, { unlocked: access.unlocked });
+      }
       const { data: rows, error: courseErr } = await adminClient
         .from('courses')
         .select('id')
-        .or(orPairs.join(','));
+        .in('faculty_id', facultyIds);
       if (courseErr) return serverError(courseErr.message);
       allowedCourseIds = (rows ?? []).map((r) => r.id);
       if (allowedCourseIds.length === 0) {
@@ -124,10 +125,6 @@ export async function GET(req: NextRequest) {
   } catch {
     return serverError();
   }
-}
-
-function escapeFilter(value: string): string {
-  return value.replace(/"/g, '\\"');
 }
 
 // POST /api/questions — students may submit (for review); they get the contributor

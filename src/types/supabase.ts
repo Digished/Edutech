@@ -772,20 +772,17 @@ export interface Database {
         Args: { p_user_id: string };
         Returns: number;
       };
-      has_active_subscription_for: {
-        Args: { p_user_id: string; p_school: string; p_department: string };
+      has_active_subscription_for_faculty: {
+        Args: { p_user_id: string; p_faculty_id: string };
         Returns: boolean;
       };
-      list_unlocked_departments: {
+      list_unlocked_faculties: {
         Args: { p_user_id: string };
         Returns: {
-          id: string;
           university_id: string | null;
-          faculty_id: string | null;
-          department_id: string | null;
-          school: string;
+          faculty_id: string;
+          school: string | null;
           faculty: string | null;
-          department: string;
           plan: 'monthly' | 'quarterly' | 'yearly';
           starts_at: string | null;
           ends_at: string | null;

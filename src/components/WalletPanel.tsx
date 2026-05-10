@@ -289,6 +289,7 @@ export default function WalletPanel() {
           </p>
         )}
 
+        {methods.length === 0 && (
         <form onSubmit={saveBank} className="space-y-3">
           {bankError && (
             <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm px-3 py-2 rounded-lg">
@@ -347,6 +348,7 @@ export default function WalletPanel() {
             {savingBank ? 'Saving…' : 'Save bank account'}
           </button>
         </form>
+        )}
       </div>
 
       {/* Recent transactions */}

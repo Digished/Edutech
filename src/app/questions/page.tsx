@@ -46,14 +46,14 @@ interface Me {
   role: 'student' | 'contributor' | 'admin';
 }
 
-interface UnlockedDept { id: string; school: string; department: string }
+interface UnlockedFaculty { faculty_id: string; school: string | null; faculty: string | null }
 
 export default function QuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [universities, setUniversities] = useState<University[]>([]);
   const [me, setMe] = useState<Me | null>(null);
-  const [unlocked, setUnlocked] = useState<UnlockedDept[]>([]);
+  const [unlocked, setUnlocked] = useState<UnlockedFaculty[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [statusLoaded, setStatusLoaded] = useState(false);
   const [total, setTotal] = useState(0);
@@ -127,7 +127,7 @@ export default function QuestionsPage() {
     fetch('/api/contributor-status').then(async (r) => {
       if (r.ok) {
         const j = await r.json();
-        setUnlocked(j.data?.unlocked_departments ?? []);
+        setUnlocked(j.data?.unlocked_faculties ?? []);
         setIsAdmin(!!j.data?.is_admin);
       }
       setStatusLoaded(true);
@@ -254,9 +254,9 @@ export default function QuestionsPage() {
             <span className="inline-flex w-12 h-12 rounded-full bg-green-50 dark:bg-green-950 text-green-600 dark:text-green-400 items-center justify-center mb-3">
               <LockIcon size={20} />
             </span>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">This department isn&apos;t unlocked yet</h2>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">No faculty unlocked yet</h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
-              Add it to your subscriptions to view and practice questions here.
+              Subscribe to one or more faculties to view and practice the questions inside them.
             </p>
             <Link
               href="/dashboard/subscription"

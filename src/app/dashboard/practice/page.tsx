@@ -14,19 +14,20 @@ interface Course {
   school: string;
   department: string;
   code: string | null;
+  faculty_id: string;
 }
 
 interface PausedSummary { total: number; answered: number }
 
-interface UnlockedDept {
-  id: string;
-  school: string;
-  department: string;
+interface UnlockedFaculty {
+  faculty_id: string;
+  school: string | null;
+  faculty: string | null;
 }
 
 interface Status {
   is_admin: boolean;
-  unlocked_departments: UnlockedDept[];
+  unlocked_faculties: UnlockedFaculty[];
 }
 
 const MAX_COUNT = 50;
@@ -80,14 +81,14 @@ export default function PracticeSetupPage() {
   }, []);
 
   const isAdmin = !!status?.is_admin;
-  const unlocked = status?.unlocked_departments ?? [];
+  const unlocked = status?.unlocked_faculties ?? [];
 
-  // Courses limited to those in unlocked departments (admins see all).
+  // Courses limited to those in unlocked faculties (admins see all).
   const accessibleCourses = useMemo(() => {
     if (isAdmin) return allCourses;
     if (unlocked.length === 0) return [];
-    const set = new Set(unlocked.map((u) => `${u.school}::${u.department}`));
-    return allCourses.filter((c) => set.has(`${c.school}::${c.department}`));
+    const set = new Set(unlocked.map((u) => u.faculty_id));
+    return allCourses.filter((c) => set.has(c.faculty_id));
   }, [allCourses, isAdmin, unlocked]);
 
   const schools = useMemo(() => {

@@ -68,15 +68,28 @@ export default function AdminDepartmentsPage() {
     e.preventDefault();
     setCreateError('');
     if (!form.faculty_id) { setCreateError('Pick a faculty'); return; }
+    const names = form.name
+      .split(/\r?\n|,/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length === 0) { setCreateError('Add at least one department name'); return; }
     setBusy('create');
     try {
-      const res = await fetch('/api/admin/departments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ faculty_id: form.faculty_id, name: form.name }),
-      });
-      const json = await res.json();
-      if (!res.ok) { setCreateError(json.error ?? 'Failed'); return; }
+      const results = await Promise.all(
+        names.map((name) =>
+          fetch('/api/admin/departments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ faculty_id: form.faculty_id, name }),
+          }).then(async (r) => ({ ok: r.ok, name, body: await r.json() })),
+        ),
+      );
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length === results.length) {
+        setCreateError(failed[0].body?.error ?? 'Failed to add departments');
+      } else if (failed.length > 0) {
+        setCreateError(`Added ${results.length - failed.length}, ${failed.length} failed: ${failed.map((f) => f.name).join(', ')}`);
+      }
       setForm((f) => ({ ...f, name: '' }));
       load();
     } finally {
@@ -139,20 +152,24 @@ export default function AdminDepartmentsPage() {
             <option value="">Faculty *</option>
             {facultiesForCreate.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
           </select>
-          <input
+          <textarea
             required
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Department name *"
-            className="px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="One department per line (or comma-separated). E.g.&#10;Computer Science&#10;Mathematics, Physics"
+            rows={3}
+            className="sm:col-span-1 px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-y"
           />
         </div>
+        <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+          Add several at once — one per line, or separated by commas.
+        </p>
         <button
           type="submit"
           disabled={busy === 'create'}
           className="mt-3 px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-xs font-medium rounded-lg"
         >
-          {busy === 'create' ? 'Adding…' : 'Add department'}
+          {busy === 'create' ? 'Adding…' : 'Add departments'}
         </button>
       </form>
 

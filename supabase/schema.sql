@@ -424,8 +424,8 @@ CREATE TABLE IF NOT EXISTS public.subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user        ON public.subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status      ON public.subscriptions(status);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_active ON public.subscriptions(user_id, ends_at) WHERE status = 'active';
-CREATE INDEX IF NOT EXISTS idx_subscriptions_user_dept_active
-  ON public.subscriptions(user_id, school, department, ends_at) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_subscriptions_user_faculty_active
+  ON public.subscriptions(user_id, faculty_id, ends_at) WHERE status = 'active';
 DROP TRIGGER IF EXISTS subscriptions_updated_at ON public.subscriptions;
 CREATE TRIGGER subscriptions_updated_at BEFORE UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -497,35 +497,34 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.has_active_subscription_for(
-  p_user_id UUID, p_school TEXT, p_department TEXT
+CREATE OR REPLACE FUNCTION public.has_active_subscription_for_faculty(
+  p_user_id UUID, p_faculty_id UUID
 ) RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.subscriptions
     WHERE user_id = p_user_id AND status = 'active' AND ends_at > NOW()
-      AND school = p_school AND department = p_department
+      AND faculty_id = p_faculty_id
   );
 $$;
 
-CREATE OR REPLACE FUNCTION public.list_unlocked_departments(p_user_id UUID)
+CREATE OR REPLACE FUNCTION public.list_unlocked_faculties(p_user_id UUID)
 RETURNS TABLE (
-  id            UUID,
   university_id UUID,
   faculty_id    UUID,
-  department_id UUID,
   school        TEXT,
   faculty       TEXT,
-  department    TEXT,
   plan          subscription_plan,
   starts_at     TIMESTAMPTZ,
   ends_at       TIMESTAMPTZ
 ) LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
-  SELECT id, university_id, faculty_id, department_id,
-         school, faculty, department, plan, starts_at, ends_at
-  FROM public.subscriptions
-  WHERE user_id = p_user_id AND status = 'active' AND ends_at > NOW()
-    AND school IS NOT NULL AND department IS NOT NULL
-  ORDER BY ends_at DESC;
+  SELECT DISTINCT ON (faculty_id)
+         university_id, faculty_id, school, faculty, plan, starts_at, ends_at
+    FROM public.subscriptions
+   WHERE user_id  = p_user_id
+     AND status   = 'active'
+     AND ends_at  > NOW()
+     AND faculty_id IS NOT NULL
+   ORDER BY faculty_id, ends_at DESC;
 $$;
 
 CREATE OR REPLACE FUNCTION public.contributor_question_count(p_user_id UUID)
@@ -618,8 +617,8 @@ CREATE TRIGGER questions_mint_on_approval
 GRANT EXECUTE ON FUNCTION public.is_admin()                                   TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.is_contributor_or_admin()                    TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION increment_question_views(UUID)                      TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.has_active_subscription_for(UUID, TEXT, TEXT) TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.list_unlocked_departments(UUID)              TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.has_active_subscription_for_faculty(UUID, UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.list_unlocked_faculties(UUID)                   TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.contributor_question_count(UUID)             TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.mint_contributor_rewards(UUID)               TO authenticated, service_role;
 

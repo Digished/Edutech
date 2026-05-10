@@ -137,8 +137,7 @@ async function handleChargeSuccess(
   if (!reference) return;
 
   // Subscription payments — flip every row that shares this reference to
-  // active. One Paystack checkout can unlock multiple (school, department)
-  // combos in the new model.
+  // active. One Paystack checkout can unlock multiple faculties in one go.
   if (purpose === 'subscription') {
     const { data: rows } = await supabase
       .from('subscriptions')
@@ -162,11 +161,11 @@ async function handleChargeSuccess(
       })
       .eq('reference', reference);
 
-    const departmentList = rows.map((r) => `${r.department} (${r.school})`).join(', ');
+    const facultyList = rows.map((r) => r.faculty ?? 'a faculty').join(', ');
     await supabase.from('notifications').insert({
       user_id: rows[0].user_id,
       title: 'Subscription activated',
-      body: `Your ${planLabel} plan is active for: ${departmentList}. Expires ${endsAt.toLocaleDateString('en-NG')}.`,
+      body: `Your ${planLabel} plan is active for: ${facultyList}. Expires ${endsAt.toLocaleDateString('en-NG')}.`,
       type: 'subscription',
     });
     return;

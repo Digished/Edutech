@@ -18,7 +18,7 @@ export async function GET() {
 
     const [{ data: count }, { data: unlocked }] = await Promise.all([
       admin.rpc('contributor_question_count', { p_user_id: authUser.id }),
-      admin.rpc('list_unlocked_departments', { p_user_id: authUser.id }),
+      admin.rpc('list_unlocked_faculties', { p_user_id: authUser.id }),
     ]);
 
     const numericCount = typeof count === 'number' ? count : 0;
@@ -38,7 +38,7 @@ export async function GET() {
       progress_to_contributor: isContributor
         ? 1
         : Math.min(numericCount / CONTRIBUTOR_PROMOTION_THRESHOLD, 1),
-      unlocked_departments: list,
+      unlocked_faculties: list,
     });
   } catch {
     return serverError();

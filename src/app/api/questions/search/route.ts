@@ -33,10 +33,9 @@ export async function GET(req: NextRequest) {
     let allowedCourseIds: string[] | null = null;
     if (!access.hasFullAccess) {
       const adminClient = createAdminClient();
-      const orPairs = access.unlocked.map(
-        (u) => `and(school.eq."${u.school.replace(/"/g, '\\"')}",department.eq."${u.department.replace(/"/g, '\\"')}")`,
-      );
-      const { data: rows } = await adminClient.from('courses').select('id').or(orPairs.join(','));
+      const facultyIds = access.unlocked.map((u) => u.faculty_id);
+      const { data: rows } = await adminClient
+        .from('courses').select('id').in('faculty_id', facultyIds);
       allowedCourseIds = (rows ?? []).map((r) => r.id);
       if (allowedCourseIds.length === 0) {
         return paginated([], 0, 1, limit, { unlocked: access.unlocked });

@@ -74,11 +74,11 @@ export async function POST(req: NextRequest) {
     if (updErr) return serverError(updErr.message);
 
     const planLabel = SUBSCRIPTION_PLANS[plan].label;
-    const departmentList = rows.map((r) => `${r.department} (${r.school})`).join(', ');
+    const facultyList = rows.map((r) => r.faculty ?? 'a faculty').join(', ');
     await admin.from('notifications').insert({
       user_id: authUser.id,
       title: 'Subscription activated',
-      body: `Your ${planLabel} plan is active for: ${departmentList}. Expires ${endsAt.toLocaleDateString('en-NG')}.`,
+      body: `Your ${planLabel} plan is active for: ${facultyList}. Expires ${endsAt.toLocaleDateString('en-NG')}.`,
       type: 'subscription',
     });
 

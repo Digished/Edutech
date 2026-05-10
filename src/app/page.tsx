@@ -106,10 +106,10 @@ const CONTRIBUTOR_WAYS: ContributorWay[] = [
   },
   {
     Illustration: EarnIllustration,
-    eyebrow: 'Earn for every batch',
-    title: 'Earn for every 100 approved questions',
+    eyebrow: 'Get paid for what gets approved',
+    title: 'Earn a flat reward for every 100 approved questions',
     desc:
-      'For every 100 questions of yours that get approved, your wallet is credited with a fixed amount. No formulas, no waiting on monthly cycles — just upload, get approved, get paid.',
+      'Upload past papers, edit, or write new questions. Each batch of 100 that passes review pays you a flat ₦ amount, straight to your wallet. No formulas. No leaderboards. No waiting until month-end.',
     bullets: [
       { Icon: CoinIcon, text: 'Fixed payout per 100 approved questions' },
       { Icon: CheckIcon, text: 'Credits land in your wallet automatically' },

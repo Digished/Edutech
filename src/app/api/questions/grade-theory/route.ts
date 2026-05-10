@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const { data: question } = await supabase
       .from('questions')
-      .select('id, question_text, question_type, correct_answer, status, is_deleted, courses(school, department)')
+      .select('id, question_text, question_type, correct_answer, status, is_deleted, courses(faculty_id)')
       .eq('id', parsed.data.question_id)
       .single();
 
@@ -38,9 +38,9 @@ export async function POST(req: NextRequest) {
     }
 
     const access = await loadAccessSummary(profile);
-    const courseRow = (question.courses ?? null) as unknown as { school: string | null; department: string | null } | null;
-    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
-      return forbidden('Subscribe to unlock this department');
+    const courseRow = (question.courses ?? null) as unknown as { faculty_id: string | null } | null;
+    if (!canRead(access, courseRow?.faculty_id ?? null)) {
+      return forbidden('Subscribe to this faculty to unlock the question.');
     }
 
     // gradeTheoryAnswer accepts a null reference and grades from the model's

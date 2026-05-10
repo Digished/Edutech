@@ -20,7 +20,7 @@ export async function GET(
 
     const { data: question } = await admin
       .from('questions')
-      .select('id, status, is_deleted, explanation, explanation_generated_at, courses(school, department)')
+      .select('id, status, is_deleted, explanation, explanation_generated_at, courses(faculty_id)')
       .eq('id', id)
       .single();
     if (!question || question.is_deleted || question.status !== 'approved') {
@@ -28,9 +28,9 @@ export async function GET(
     }
 
     const access = await loadAccessSummary(profile);
-    const courseRow = (question.courses ?? null) as unknown as { school: string | null; department: string | null } | null;
-    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
-      return forbidden('Subscribe to unlock this department');
+    const courseRow = (question.courses ?? null) as unknown as { faculty_id: string | null } | null;
+    if (!canRead(access, courseRow?.faculty_id ?? null)) {
+      return forbidden('Subscribe to this faculty to unlock the question.');
     }
 
     return ok({
@@ -58,7 +58,7 @@ export async function POST(
 
     const { data: question } = await admin
       .from('questions')
-      .select('id, status, is_deleted, question_text, question_type, options, correct_answer, explanation, explanation_generated_at, courses(school, department)')
+      .select('id, status, is_deleted, question_text, question_type, options, correct_answer, explanation, explanation_generated_at, courses(faculty_id)')
       .eq('id', id)
       .single();
     if (!question || question.is_deleted || question.status !== 'approved') {
@@ -66,9 +66,9 @@ export async function POST(
     }
 
     const access = await loadAccessSummary(profile);
-    const courseRow = (question.courses ?? null) as unknown as { school: string | null; department: string | null } | null;
-    if (!canRead(access, courseRow?.school ?? null, courseRow?.department ?? null)) {
-      return forbidden('Subscribe to unlock this department');
+    const courseRow = (question.courses ?? null) as unknown as { faculty_id: string | null } | null;
+    if (!canRead(access, courseRow?.faculty_id ?? null)) {
+      return forbidden('Subscribe to this faculty to unlock the question.');
     }
 
     // Cache hit — return immediately.
