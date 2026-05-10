@@ -127,7 +127,39 @@ export async function GET(req: NextRequest) {
       .range(from, to);
 
     if (error) return serverError(error.message);
-    const sanitized = (data ?? []).map((row) => {
+
+    let rows = data ?? [];
+
+    // If the caller wants every part of any returned multi-part question, look
+    // up sibling parts and merge them in. Used by the practice picker so a
+    // grouped question is never delivered with missing parts.
+    const wantGroupComplete = searchParams.get('group_complete') === '1';
+    if (wantGroupComplete && rows.length > 0) {
+      const groupIds = Array.from(
+        new Set(
+          rows
+            .map((r) => (r as unknown as { group_id: string | null }).group_id)
+            .filter((g): g is string => !!g),
+        ),
+      );
+      if (groupIds.length > 0) {
+        const haveIds = new Set(rows.map((r) => (r as unknown as { id: string }).id));
+        const { data: siblings } = await supabase
+          .from('questions')
+          .select(`*, courses(name, school, department, code), question_analytics(views_count, last_viewed_at)`)
+          .eq('status', 'approved')
+          .eq('is_deleted', false)
+          .in('group_id', groupIds);
+        for (const s of siblings ?? []) {
+          if (!haveIds.has((s as unknown as { id: string }).id)) {
+            rows.push(s);
+            haveIds.add((s as unknown as { id: string }).id);
+          }
+        }
+      }
+    }
+
+    const sanitized = rows.map((row) => {
       const { correct_answer: _omit, ...rest } = row as Record<string, unknown>;
       void _omit;
       return rest;
@@ -186,7 +218,7 @@ export async function POST(req: NextRequest) {
           level: level ?? null,
           semester: semester ?? null,
           source_type: 'manual',
-          status: 'approved',
+          status: 'pending',
         })
         .select('id')
         .single();
@@ -211,7 +243,7 @@ export async function POST(req: NextRequest) {
             level: level ?? null,
             semester: semester ?? null,
             source_type: 'manual',
-            status: 'approved',
+            status: 'pending',
             content_hash: partHash,
             image_urls: p.image_urls ?? [],
           })
@@ -229,7 +261,7 @@ export async function POST(req: NextRequest) {
         inserted.push({ id: q.id });
       }
 
-      return created({ group_id: group.id, question_ids: inserted.map((x) => x.id) }, `Added ${inserted.length} parts to the bank`);
+      return created({ group_id: group.id, question_ids: inserted.map((x) => x.id) }, `Submitted ${inserted.length} parts for review`);
     }
 
     // ---------- standalone branch ----------
@@ -254,7 +286,7 @@ export async function POST(req: NextRequest) {
         level: level ?? null,
         semester: semester ?? null,
         source_type: 'manual',
-        status: 'approved',
+        status: 'pending',
         content_hash,
         image_urls: image_urls ?? [],
       })
@@ -292,7 +324,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return created(question, 'Question added to the bank');
+    return created(question, 'Question submitted for review');
   } catch {
     return serverError();
   }

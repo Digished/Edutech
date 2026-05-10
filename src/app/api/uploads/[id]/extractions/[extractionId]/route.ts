@@ -18,6 +18,7 @@ const schema = z.object({
   year: z.number().int().min(1900).max(2100).nullable().optional(),
   excluded: z.boolean().optional(),
   image_urls: z.array(z.string().url()).max(8).optional(),
+  part_label: z.string().max(8).nullable().optional(),
 });
 
 export async function PATCH(

@@ -113,6 +113,61 @@ export default function ReviewExtractionsPage({
     }
   }
 
+  // -------- regrouping --------
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [groupStem, setGroupStem] = useState('');
+  const [regrouping, setRegrouping] = useState(false);
+
+  function toggleSelect(extId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(extId)) next.delete(extId); else next.add(extId);
+      return next;
+    });
+  }
+
+  async function regroupSelected() {
+    const ids = Array.from(selected);
+    if (ids.length < 2 || !groupStem.trim()) return;
+    setRegrouping(true);
+    try {
+      // Preserve document order so part_position lines up with the page.
+      const ordered = items.filter((e) => selected.has(e.id)).map((e) => e.id);
+      const res = await fetch(`/api/uploads/${id}/extractions/regroup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'group', ids: ordered, stem: groupStem.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? 'Could not group'); return; }
+      setSelected(new Set());
+      setGroupModalOpen(false);
+      setGroupStem('');
+      await load();
+    } finally {
+      setRegrouping(false);
+    }
+  }
+
+  async function detachFromGroup(extId: string) {
+    const res = await fetch(`/api/uploads/${id}/extractions/regroup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'detach', id: extId }),
+    });
+    if (res.ok) await load();
+  }
+
+  async function updateStem(groupKey: string, stem: string) {
+    const res = await fetch(`/api/uploads/${id}/extractions/regroup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'update_stem', group_key: groupKey, stem }),
+    });
+    if (res.ok) await load();
+  }
+
   const willPublish = items.filter((e) => !e.excluded && !e.is_duplicate && !e.confirmed).length;
   const dupCount = items.filter((e) => e.is_duplicate).length;
   const exclCount = items.filter((e) => e.excluded).length;
@@ -133,8 +188,9 @@ export default function ReviewExtractionsPage({
           <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white tracking-tight">Review extracted questions</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Edit anything you need to fix, attach images for any figure-based questions,
-            and delete the ones you don&apos;t want to publish. Duplicates of existing
-            questions are skipped automatically.
+            and delete the ones you don&apos;t want to submit. Duplicates of existing
+            questions are skipped automatically. Submitted questions go to admin review before
+            appearing in the question bank.
           </p>
         </div>
 
@@ -146,9 +202,9 @@ export default function ReviewExtractionsPage({
 
         {done && (
           <div className="mb-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 text-sm px-4 py-3 rounded-lg">
-            Published {done.published} question{done.published === 1 ? '' : 's'}.
-            {done.skipped ? ` ${done.skipped} skipped.` : ''}{' '}
-            <Link href="/questions" className="underline font-medium inline-flex items-center gap-1">View question bank <ArrowRightIcon size={12} /></Link>
+            Submitted {done.published} question{done.published === 1 ? '' : 's'} for admin review.
+            {done.skipped ? ` ${done.skipped} skipped.` : ''} You&apos;ll be notified once they&apos;re approved.{' '}
+            <Link href="/dashboard/contributions" className="underline font-medium inline-flex items-center gap-1">View your contributions <ArrowRightIcon size={12} /></Link>
           </div>
         )}
 
@@ -173,6 +229,32 @@ export default function ReviewExtractionsPage({
               <span><span className="font-semibold text-zinc-700 dark:text-zinc-300">{exclCount}</span> excluded</span>
             </div>
 
+            {/* Group / regroup toolbar */}
+            <div className="sticky top-14 z-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 mb-3 flex items-center gap-3 flex-wrap text-xs">
+              <span className="text-zinc-700 dark:text-zinc-200">
+                <span className="font-semibold">{selected.size}</span> selected
+              </span>
+              <span className="text-zinc-400 hidden sm:inline">·</span>
+              <span className="text-zinc-500 dark:text-zinc-400 hidden sm:inline">
+                Tick rows that share a heading, then group them under one stem.
+              </span>
+              <button
+                disabled={selected.size < 2}
+                onClick={() => { setGroupStem(''); setGroupModalOpen(true); }}
+                className="ml-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium rounded-lg"
+              >
+                Group {selected.size >= 2 ? `${selected.size} ` : ''}as multi-part
+              </button>
+              {selected.size > 0 && (
+                <button
+                  onClick={() => setSelected(new Set())}
+                  className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
             <div className="space-y-3">
               {items.map((e, idx) => {
                 const prev = idx > 0 ? items[idx - 1] : null;
@@ -180,22 +262,31 @@ export default function ReviewExtractionsPage({
                 const startsGroup = !!e.group_key && (!prev || prev.group_key !== e.group_key);
                 return (
                   <div key={e.id}>
-                    {startsGroup && e.stem && (
-                      <div className="rounded-t-xl border border-b-0 border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-4 py-3">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400 mb-1">
-                          Shared heading · question {e.group_key}
-                        </div>
-                        <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
-                          {e.stem}
-                        </p>
-                      </div>
+                    {startsGroup && e.group_key && (
+                      <StemHeader
+                        groupKey={e.group_key}
+                        stem={e.stem ?? ''}
+                        onSave={(text) => updateStem(e.group_key!, text)}
+                      />
                     )}
-                    <ExtractionCard
-                      index={idx + 1}
-                      ext={e}
-                      onPersist={(p) => persist(e.id, p)}
-                      onDelete={() => deleteExt(e.id)}
-                    />
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(e.id)}
+                        onChange={() => toggleSelect(e.id)}
+                        className="mt-5 ml-1 accent-amber-600 shrink-0"
+                        title="Select to group with other rows"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <ExtractionCard
+                          index={idx + 1}
+                          ext={e}
+                          onPersist={(p) => persist(e.id, p)}
+                          onDelete={() => deleteExt(e.id)}
+                          onDetach={e.group_key ? () => detachFromGroup(e.id) : undefined}
+                        />
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -224,12 +315,49 @@ export default function ReviewExtractionsPage({
         )}
       </div>
 
+      {groupModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-lg p-6">
+            <h2 className="font-semibold text-zinc-900 dark:text-white mb-1">
+              Group {selected.size} questions under one stem
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
+              Type the shared heading / stem the parts belong to. Each selected row becomes a sub-part
+              labelled a, b, c… in the order they appear on this page.
+            </p>
+            <textarea
+              autoFocus
+              rows={4}
+              value={groupStem}
+              onChange={(e) => setGroupStem(e.target.value)}
+              placeholder="e.g. Given the model ABC..."
+              className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => { setGroupModalOpen(false); setGroupStem(''); }}
+                className="flex-1 px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={regrouping || !groupStem.trim() || selected.size < 2}
+                onClick={regroupSelected}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg"
+              >
+                {regrouping ? 'Grouping…' : 'Group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
             <h2 className="font-semibold text-zinc-900 dark:text-white mb-2">Publish {willPublish} question{willPublish === 1 ? '' : 's'}?</h2>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5">
-              These will go live in the question bank immediately. You can&apos;t publish this batch again from this page.
+              These will be sent to admins for review. You&apos;ll be notified as each one is approved or rejected. You can&apos;t submit this batch again from this page.
             </p>
             <div className="flex gap-3">
               <button
@@ -253,16 +381,72 @@ export default function ReviewExtractionsPage({
   );
 }
 
+function StemHeader({
+  groupKey,
+  stem,
+  onSave,
+}: {
+  groupKey: string;
+  stem: string;
+  onSave: (text: string) => Promise<void> | void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(stem);
+  useEffect(() => { setDraft(stem); }, [stem]);
+
+  return (
+    <div className="rounded-t-xl border border-b-0 border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-4 py-3">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+          Shared heading · group {groupKey.slice(0, 6)}
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditing((v) => !v)}
+          className="text-[11px] text-amber-700 dark:text-amber-400 hover:underline"
+        >
+          {editing ? 'Cancel' : 'Edit stem'}
+        </button>
+      </div>
+      {editing ? (
+        <>
+          <textarea
+            rows={3}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-full px-3 py-2 rounded-md border border-amber-300 dark:border-amber-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          <div className="mt-2 flex justify-end">
+            <button
+              type="button"
+              onClick={async () => { await onSave(draft.trim()); setEditing(false); }}
+              disabled={!draft.trim()}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-medium rounded-md"
+            >
+              Save stem
+            </button>
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+          {stem || <span className="italic text-zinc-400">No stem text — click &ldquo;Edit stem&rdquo; to add one.</span>}
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface CardProps {
   index: number;
   ext: Extraction;
   onPersist: (p: Partial<Extraction>) => Promise<boolean>;
   onDelete: () => void;
+  onDetach?: () => void;
 }
 
 // One card holds all of its own draft state and only persists when the user
 // blurs / clicks save. Avoids the "everything autosaves separately" jank.
-function ExtractionCard({ index, ext, onPersist, onDelete }: CardProps) {
+function ExtractionCard({ index, ext, onPersist, onDelete, onDetach }: CardProps) {
   const [questionText, setQuestionText] = useState(ext.question_text);
   const [questionType, setQuestionType] = useState<'mcq' | 'theory'>(ext.question_type);
   const [optionsList, setOptionsList] = useState<{ key: string; value: string }[]>(
@@ -394,6 +578,16 @@ function ExtractionCard({ index, ext, onPersist, onDelete }: CardProps) {
             <span className="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
               Part {ext.part_label}
             </span>
+          )}
+          {onDetach && (
+            <button
+              type="button"
+              onClick={onDetach}
+              className="text-[10px] text-amber-700 dark:text-amber-400 hover:underline"
+              title="Detach this row from its group"
+            >
+              Detach
+            </button>
           )}
           <select
             value={questionType}

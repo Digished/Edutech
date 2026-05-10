@@ -17,6 +17,10 @@ interface Question {
   year: number | null;
   status: string;
   created_at: string;
+  group_id: string | null;
+  part_label: string | null;
+  position: number | null;
+  group: { id: string; stem: string; stem_image_urls: string[] | null } | null;
   courses: { name: string; school: string; department: string } | null;
   question_contributions: Contributor[];
 }
@@ -65,6 +69,13 @@ export default function AdminQuestionsPage() {
   const [flags, setFlags] = useState<Record<string, QuestionFlag[]>>({});
   const [extrasLoading, setExtrasLoading] = useState<string | null>(null);
 
+  // Bulk moderation
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<'approve' | 'reject' | null>(null);
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
+
   const limit = 20;
 
   const load = useCallback(async () => {
@@ -80,6 +91,48 @@ export default function AdminQuestionsPage() {
   }, [statusFilter, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Clear selection when filter or page changes.
+  useEffect(() => { setSelected(new Set()); setBulkResult(null); }, [statusFilter, page]);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    setSelected((prev) =>
+      prev.size === questions.length ? new Set() : new Set(questions.map((q) => q.id)),
+    );
+  }
+
+  async function runBulk(status: 'approved' | 'rejected', reason?: string) {
+    if (selected.size === 0) return;
+    setBulkLoading(true);
+    setBulkResult(null);
+    try {
+      const res = await fetch('/api/admin/questions/bulk-moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(selected), status, reason }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setBulkResult(json.error ?? 'Bulk action failed');
+        return;
+      }
+      setBulkResult(json.message ?? `Updated ${json.data?.updated ?? 0}`);
+      setQuestions((prev) => prev.filter((q) => !selected.has(q.id)));
+      setTotal((t) => Math.max(0, t - (json.data?.updated ?? 0)));
+      setSelected(new Set());
+    } finally {
+      setBulkLoading(false);
+      setBulkAction(null);
+      setBulkReason('');
+    }
+  }
 
   async function moderate(id: string, status: 'approved' | 'rejected', reason?: string) {
     setActionLoading(id);
@@ -175,13 +228,111 @@ export default function AdminQuestionsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {questions.map((q) => {
+          {/* Bulk action bar */}
+          <div className="sticky top-0 z-10 bg-white/90 dark:bg-zinc-900/90 backdrop-blur border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-2 text-xs text-zinc-700 dark:text-zinc-200 select-none cursor-pointer">
+              <input
+                type="checkbox"
+                checked={questions.length > 0 && selected.size === questions.length}
+                onChange={toggleSelectAll}
+                className="accent-green-600"
+              />
+              <span>Select all on this page</span>
+            </label>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              {selected.size} selected
+            </span>
+            {bulkResult && (
+              <span className="text-xs text-green-700 dark:text-green-400">{bulkResult}</span>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                disabled={selected.size === 0 || bulkLoading}
+                onClick={() => setBulkAction('approve')}
+                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white text-xs font-medium rounded-lg transition-colors"
+              >
+                Approve selected
+              </button>
+              <button
+                disabled={selected.size === 0 || bulkLoading}
+                onClick={() => setBulkAction('reject')}
+                className="px-3 py-1.5 border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-40 text-xs font-medium rounded-lg transition-colors"
+              >
+                Reject selected
+              </button>
+            </div>
+          </div>
+
+          {questions.map((q, idx) => {
             const isPublished = q.status === 'approved';
+            const isSelected = selected.has(q.id);
+            const prev = idx > 0 ? questions[idx - 1] : null;
+            const startsGroup =
+              !!q.group_id && q.group && (!prev || prev.group_id !== q.group_id);
+
+            // Bulk-select / bulk-action affordance for an entire group: tick
+            // all sibling parts that are currently visible on the page.
+            function selectWholeGroup() {
+              if (!q.group_id) return;
+              setSelected((prevSel) => {
+                const next = new Set(prevSel);
+                for (const sib of questions) {
+                  if (sib.group_id === q.group_id) next.add(sib.id);
+                }
+                return next;
+              });
+            }
+
             return (
-            <div key={q.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-5">
-              <p className="text-sm font-medium text-zinc-900 dark:text-white leading-relaxed mb-3">
-                {q.question_text}
-              </p>
+            <div key={q.id}>
+              {startsGroup && q.group && (
+                <div className="rounded-t-xl border border-b-0 border-amber-200 dark:border-amber-900 bg-amber-50/60 dark:bg-amber-950/30 px-4 py-3">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                      Multi-part question · {questions.filter((x) => x.group_id === q.group_id).length} parts
+                    </div>
+                    <button
+                      type="button"
+                      onClick={selectWholeGroup}
+                      className="text-[11px] text-amber-700 dark:text-amber-400 hover:underline"
+                    >
+                      Select all parts
+                    </button>
+                  </div>
+                  <p className="text-sm text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap leading-relaxed">
+                    {q.group.stem}
+                  </p>
+                  {Array.isArray(q.group.stem_image_urls) && q.group.stem_image_urls.length > 0 && (
+                    <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {q.group.stem_image_urls.map((url, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={`${url}-${i}`} src={url} alt="" className="w-full h-auto max-h-48 object-contain rounded-md border border-amber-200 dark:border-amber-900 bg-white" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            <div className={`bg-white dark:bg-zinc-900 border p-5 transition-colors ${
+              isSelected ? 'border-green-400 dark:border-green-700' : 'border-zinc-200 dark:border-zinc-800'
+            } ${q.group_id ? 'rounded-none' : 'rounded-xl'}`}>
+              <div className="flex items-start gap-3 mb-3">
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleSelect(q.id)}
+                  className="mt-1 accent-green-600 shrink-0"
+                />
+                <div className="flex-1">
+                  {q.part_label && (
+                    <span className="inline-block text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400 mr-2 align-middle">
+                      Part {q.part_label}
+                    </span>
+                  )}
+                  <p className="text-sm font-medium text-zinc-900 dark:text-white leading-relaxed inline">
+                    {q.question_text}
+                  </p>
+                </div>
+              </div>
 
               {q.options && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-3">
@@ -313,6 +464,7 @@ export default function AdminQuestionsPage() {
                 </div>
               )}
             </div>
+            </div>
             );
           })}
         </div>
@@ -377,6 +529,51 @@ export default function AdminQuestionsPage() {
                 disabled={actionLoading === rejectId}
                 className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg transition-colors">
                 {actionLoading === rejectId ? 'Rejecting…' : 'Confirm rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk action modal */}
+      {bulkAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 w-full max-w-md p-6">
+            <h2 className="font-semibold text-zinc-900 dark:text-white mb-2">
+              {bulkAction === 'approve' ? 'Approve' : 'Reject'} {selected.size} question{selected.size === 1 ? '' : 's'}?
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+              {bulkAction === 'approve'
+                ? 'They will go live in the bank immediately. Each contributor is notified.'
+                : 'They will be marked rejected. Each contributor is notified with the reason below (optional).'}
+            </p>
+            {bulkAction === 'reject' && (
+              <textarea
+                value={bulkReason}
+                onChange={(e) => setBulkReason(e.target.value)}
+                placeholder="Optional reason (sent to all selected contributors)"
+                rows={3}
+                className="w-full px-3 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 resize-none mb-4"
+              />
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setBulkAction(null); setBulkReason(''); }}
+                disabled={bulkLoading}
+                className="flex-1 px-4 py-2 text-sm border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-zinc-700 dark:text-zinc-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => runBulk(bulkAction === 'approve' ? 'approved' : 'rejected', bulkReason || undefined)}
+                disabled={bulkLoading}
+                className={`flex-1 disabled:opacity-60 text-white text-sm font-medium py-2 rounded-lg transition-colors ${
+                  bulkAction === 'approve'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
+              >
+                {bulkLoading ? 'Working…' : `Yes, ${bulkAction}`}
               </button>
             </div>
           </div>

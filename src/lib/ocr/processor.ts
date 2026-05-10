@@ -37,38 +37,91 @@ Two question types may be present and you MUST extract BOTH:
 - "mcq" — multiple-choice questions that present options (A, B, C, D, …). Capture EVERY option that appears under the question.
 - "theory" — open-ended / essay / explanation / "discuss" / "describe" / "prove" / "calculate" / "show that" / "list and explain" questions that have NO options.
 
-MULTI-PART THEORY QUESTIONS — VERY IMPORTANT:
-Many theory questions have a shared stem (a heading, a model, a passage, a diagram description) followed by several numbered or lettered sub-parts. Example:
+============================================================
+MULTI-PART THEORY QUESTIONS — READ THIS CAREFULLY
+============================================================
 
-  5. Given the model ABC ...
-     (a) Define AB.
-     (b) What is the coefficient of ABC?
-     (c) Sketch the graph.
+A SHARED STEM is any leading text — a paragraph, a model description, a passage,
+a diagram, a "Consider the following:" header — that the sub-parts after it all
+depend on. The numbering style of the sub-parts can be ANY of:
+  letters:   (a) (b) (c) … or  a. b. c.
+  numbers:   1. 2. 3.   or  (1) (2) (3)
+  roman:     (i) (ii) (iii)
 
-You MUST split this into ONE row PER sub-part, all sharing the same stem.
-- Emit one row per sub-part.
-- Each row carries the SAME "group_key" (use the parent number, e.g. "5").
-- "stem" carries the shared heading text ("Given the model ABC ...") on every row in the group.
-- "part_label" is the sub-part marker exactly as printed ("a", "b", "i", "1").
-- "part_position" is the 1-based order of the sub-part within the group.
-- "question_text" is ONLY the sub-part text ("Define AB."), NOT the stem.
+NUMBERED SUB-PARTS (1, 2, 3) ARE STILL SUB-PARTS.
+The numbering style does NOT change whether something is a sub-part. You must
+use the surrounding STRUCTURE to decide:
 
-Standalone questions (no shared stem) MUST set group_key, stem, part_label and part_position to null.
+  GROUPED (sub-parts share a stem):
+    "Given the model ABC, where x = 5 and y = 10:
+      1. Define AB.
+      2. What is the coefficient of ABC?
+      3. Sketch the graph of f(x)."
+    → emit 3 rows, all with group_key="<the-parent-question-number>",
+      stem="Given the model ABC, where x = 5 and y = 10:",
+      part_labels "1", "2", "3".
+
+  NOT GROUPED (each is a standalone question; numbers are just question numbers):
+    "1. State Newton's second law.
+     2. Define enthalpy.
+     3. What is the SI unit of pressure?"
+    → emit 3 standalone rows. group_key, stem, part_label all null.
+
+Use these signals to decide:
+  • A stem exists if there is a sentence / paragraph / diagram description
+    *immediately above* the sub-parts that they all reference, depend on, or
+    elaborate on.
+  • If each numbered item is a self-contained, unrelated question, it is NOT
+    a sub-part — it is a standalone question.
+  • If you see "Question 5" or "5." followed by introductory text and then
+    smaller numbering / lettering underneath, the smaller items are sub-parts
+    and "5" (or whatever the parent number is) is the group_key.
+
+NESTED SUB-PARTS — sub-parts can themselves have sub-parts:
+    "5. Given the model ABC, where x = 5 and y = 10:
+       (a) Define AB.
+           (i) State the formula.
+           (ii) Explain its derivation.
+       (b) What is the coefficient of ABC?"
+
+For nested structures:
+  • Emit ONE row PER LEAF (the deepest sub-part that is an actual question).
+    Above, leaves are: a.i, a.ii, b.
+  • part_label uses dot-notation for the hierarchy: "a.i", "a.ii", "b".
+  • If an intermediate branch carries question text that *also* needs answering
+    (e.g. "(a) Define AB." is itself a question separate from (i) and (ii)),
+    emit it ALSO as its own row with part_label="a" and question_text="Define AB.".
+  • If the intermediate branch is just a header (e.g. "(a) Consider the
+    following:" with no answerable content), do NOT emit a row for it — only
+    its leaves.
+  • All leaves under one top-level question share the SAME group_key and the
+    SAME stem (the top-level shared text). Do not duplicate intermediate
+    headers into the stem field; if an intermediate header applies only to its
+    siblings, prepend it to question_text of those leaves instead.
+  • part_position is the 1-based order of the leaf within the whole group,
+    counted in document order (a.i=1, a.ii=2, b=3).
+
+============================================================
+RETURN FORMAT
+============================================================
 
 Return a JSON object of the form:
 { "questions": [ { ... }, { ... } ] }
 
 Each item must have:
-- question_text: string (the sub-part text only for grouped rows; the full question for standalone). Do NOT include the option list inside question_text — the options must live only in the options field. Do NOT repeat the stem in question_text — that goes in the "stem" field.
+- question_text: string. For standalone questions, the FULL question. For
+  grouped rows, ONLY the leaf sub-part text — never repeat the stem here.
+  Do NOT include the option list inside question_text — options live only in
+  the options field.
 - question_type: "mcq" | "theory"
 - options: object or null — REQUIRED for mcq. Capture EVERY printed option, keyed exactly by its label (usually A, B, C, D — sometimes E, or i/ii/iii). The value is the option text only, with the leading label, parentheses or punctuation stripped (e.g. "A. 5kg" -> "5kg"). NEVER leave options empty or null for an mcq — if you cannot read the options, mark question_type as "theory" instead. MUST be null for theory.
-- correct_answer: string or null. Use the EXACT option label (e.g. "A", "B", "C") for MCQs. For theory, a short reference answer if explicitly given (per sub-part).
+- correct_answer: string or null. Use the EXACT option label (e.g. "A", "B", "C") for MCQs. For theory, a short reference answer if explicitly given (per leaf).
 - year: number or null (academic year if visible on the paper)
 - has_figure: boolean — true if the question text or stem refers to a figure, diagram, chart, table, image, graph, "shown below", "above", "Fig. 1", etc. that a student would need to see to answer. False otherwise.
-- group_key: string or null — same value for every sub-part of a multi-part question; null for standalone.
-- stem: string or null — shared heading text for multi-part rows; null for standalone.
-- part_label: string or null — sub-part marker as printed; null for standalone.
-- part_position: integer or null — 1-based order within the group; null for standalone.
+- group_key: string or null — same value for every leaf of one parent question; null for standalone. Typically use the parent question number ("5") or the parent label.
+- stem: string or null — top-level shared heading text for grouped rows; null for standalone. Same value on every row in the group.
+- part_label: string or null — the leaf's hierarchical label using dot-notation ("a", "1.a", "a.i", "1.a.i"); null for standalone.
+- part_position: integer or null — 1-based document order of the leaf inside the group; null for standalone.
 
 Answer key handling — VERY IMPORTANT:
 - Many Nigerian past papers print an answer key at the end of the paper, often labelled "ANSWERS", "ANSWER KEY", "SOLUTIONS", "MARKING SCHEME" or similar.
