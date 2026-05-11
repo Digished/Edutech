@@ -257,13 +257,13 @@ export default function UploadsPage() {
             <div>
               <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
                 File <span className="text-red-500">*</span>
-                <span className="ml-2 text-xs font-normal text-zinc-400">PDF, DOCX, JPG, PNG — max 20MB</span>
+                <span className="ml-2 text-xs font-normal text-zinc-400">PDF, DOC, DOCX, JPG, PNG — max 20MB</span>
               </label>
               <input
                 ref={fileInputRef}
                 type="file"
                 required
-                accept=".pdf,.docx,.jpg,.jpeg,.png,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
                 className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-green-500 file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:bg-green-50 file:text-green-700 dark:file:bg-green-950 dark:file:text-green-400 file:text-xs file:font-medium"
               />
