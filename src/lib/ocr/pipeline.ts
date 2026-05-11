@@ -8,8 +8,36 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   extractQuestionsFromImageUrl,
   extractQuestionsFromPdfBuffer,
+  extractQuestionsFromText,
   ExtractionResult,
 } from './processor';
+import mammoth from 'mammoth';
+import WordExtractor from 'word-extractor';
+import { writeFile, unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { randomUUID } from 'crypto';
+
+// Pulls plain text out of a Word file. .docx is a zip of XML, handled by
+// mammoth; legacy .doc is a binary OLE format, handled by word-extractor.
+async function extractWordText(
+  buffer: ArrayBuffer,
+  filename: string,
+): Promise<string> {
+  if (/\.doc$/i.test(filename)) {
+    // word-extractor needs a path on disk.
+    const path = join(tmpdir(), `${randomUUID()}.doc`);
+    await writeFile(path, Buffer.from(buffer));
+    try {
+      const doc = await new WordExtractor().extract(path);
+      return doc.getBody();
+    } finally {
+      await unlink(path).catch(() => null);
+    }
+  }
+  const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buffer) });
+  return value;
+}
 import { hashQuestionText } from '@/lib/utils/hash';
 import { trigramSimilarity } from '@/lib/dedup/similarity';
 import { FileType } from '@/types/database';
@@ -82,8 +110,22 @@ export async function processUpload(uploadId: string): Promise<void> {
     await setProgress(supabase, uploadId, 25, 'Reading questions with AI');
 
     let extractionResult: ExtractionResult;
-    if ((upload.file_type as FileType) === 'image') {
+    const fileType = upload.file_type as FileType;
+    if (fileType === 'image') {
       extractionResult = await extractQuestionsFromImageUrl(signed.signedUrl);
+    } else if (fileType === 'docx') {
+      const fileResp = await fetch(signed.signedUrl);
+      if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);
+      const fileBuffer = await fileResp.arrayBuffer();
+      const text = await extractWordText(
+        fileBuffer,
+        upload.original_name ?? 'paper.docx',
+      );
+      if (!text.trim()) {
+        extractionResult = { questions: [], error: 'Word document contained no readable text' };
+      } else {
+        extractionResult = await extractQuestionsFromText(text);
+      }
     } else {
       const fileResp = await fetch(signed.signedUrl);
       if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);

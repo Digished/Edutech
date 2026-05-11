@@ -68,15 +68,26 @@ export async function POST(req: NextRequest) {
       return badRequest('Pick a semester (1, 2 or 3)');
     }
 
-    const mimeToType: Record<string, 'pdf' | 'image'> = {
+    const mimeToType: Record<string, 'pdf' | 'image' | 'docx'> = {
       'application/pdf': 'pdf',
       'image/jpeg': 'image',
       'image/png': 'image',
       'image/webp': 'image',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      // Legacy Word (.doc) — we map it to the same 'docx' file_type so the
+      // pipeline knows to extract text via a Word parser.
+      'application/msword': 'docx',
     };
 
-    const file_type = mimeToType[file.type];
-    if (!file_type) return badRequest('Unsupported file type. Use PDF or image (JPEG/PNG/WebP)');
+    // Some browsers (and Safari especially) report Word docs with a generic or
+    // empty MIME type, so fall back to the extension.
+    let file_type = mimeToType[file.type];
+    if (!file_type && /\.(docx?|)$/i.test(file.name)) {
+      if (/\.docx?$/i.test(file.name)) file_type = 'docx';
+    }
+    if (!file_type) {
+      return badRequest('Unsupported file type. Use PDF, DOC/DOCX, or image (JPEG/PNG/WebP)');
+    }
 
     const ext = file.name.split('.').pop();
     const storagePath = `${profile.id}/${Date.now()}.${ext}`;

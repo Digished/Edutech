@@ -31,6 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const nav = [
     { href: '/admin/questions', label: 'Questions' },
     { href: '/admin/withdrawals', label: 'Payouts' },
+    { href: '/admin/subscriptions', label: 'Subscriptions' },
     { href: '/admin/users', label: 'Users' },
     { href: '/admin/universities', label: 'Universities' },
     { href: '/admin/faculties', label: 'Faculties' },

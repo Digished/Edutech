@@ -9,7 +9,7 @@ export type TransactionType = 'credit' | 'debit';
 export type TransactionStatus = 'pending' | 'successful' | 'failed';
 export type TransactionReason = 'contribution_reward' | 'withdrawal' | 'adjustment' | 'refund';
 export type WithdrawalStatus = 'pending' | 'processing' | 'successful' | 'failed';
-export type FileType = 'pdf' | 'image';
+export type FileType = 'pdf' | 'image' | 'docx';
 export type ModerationStatus = 'pending' | 'approved' | 'rejected';
 export type QuestionType = 'mcq' | 'theory';
 
