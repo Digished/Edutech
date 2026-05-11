@@ -8,8 +8,10 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import {
   extractQuestionsFromImageUrl,
   extractQuestionsFromPdfBuffer,
+  extractQuestionsFromText,
   ExtractionResult,
 } from './processor';
+import mammoth from 'mammoth';
 import { hashQuestionText } from '@/lib/utils/hash';
 import { trigramSimilarity } from '@/lib/dedup/similarity';
 import { FileType } from '@/types/database';
@@ -82,8 +84,21 @@ export async function processUpload(uploadId: string): Promise<void> {
     await setProgress(supabase, uploadId, 25, 'Reading questions with AI');
 
     let extractionResult: ExtractionResult;
-    if ((upload.file_type as FileType) === 'image') {
+    const fileType = upload.file_type as FileType;
+    if (fileType === 'image') {
       extractionResult = await extractQuestionsFromImageUrl(signed.signedUrl);
+    } else if (fileType === 'docx') {
+      const fileResp = await fetch(signed.signedUrl);
+      if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);
+      const fileBuffer = await fileResp.arrayBuffer();
+      const { value: text } = await mammoth.extractRawText({
+        buffer: Buffer.from(fileBuffer),
+      });
+      if (!text.trim()) {
+        extractionResult = { questions: [], error: 'Word document contained no readable text' };
+      } else {
+        extractionResult = await extractQuestionsFromText(text);
+      }
     } else {
       const fileResp = await fetch(signed.signedUrl);
       if (!fileResp.ok) throw new Error(`Could not download file (HTTP ${fileResp.status})`);
