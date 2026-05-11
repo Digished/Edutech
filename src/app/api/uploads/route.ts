@@ -68,15 +68,23 @@ export async function POST(req: NextRequest) {
       return badRequest('Pick a semester (1, 2 or 3)');
     }
 
-    const mimeToType: Record<string, 'pdf' | 'image'> = {
+    const mimeToType: Record<string, 'pdf' | 'image' | 'docx'> = {
       'application/pdf': 'pdf',
       'image/jpeg': 'image',
       'image/png': 'image',
       'image/webp': 'image',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
     };
 
-    const file_type = mimeToType[file.type];
-    if (!file_type) return badRequest('Unsupported file type. Use PDF or image (JPEG/PNG/WebP)');
+    // Some browsers / OSes send an empty or generic mime type for .docx —
+    // fall back to the file extension so contributors aren't blocked.
+    const lowerName = (file.name ?? '').toLowerCase();
+    let file_type = mimeToType[file.type];
+    if (!file_type && lowerName.endsWith('.docx')) file_type = 'docx';
+    if (!file_type && lowerName.endsWith('.pdf')) file_type = 'pdf';
+    if (!file_type) {
+      return badRequest('Unsupported file type. Use PDF, Word (.docx) or image (JPEG/PNG/WebP)');
+    }
 
     const ext = file.name.split('.').pop();
     const storagePath = `${profile.id}/${Date.now()}.${ext}`;

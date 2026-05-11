@@ -348,7 +348,7 @@ export interface Database {
           level: number | null;
           semester: number | null;
           file_url: string;
-          file_type: 'pdf' | 'image';
+          file_type: 'pdf' | 'image' | 'docx';
           original_name: string | null;
           file_size: number | null;
           processed: boolean;
@@ -367,7 +367,7 @@ export interface Database {
           level?: number | null;
           semester?: number | null;
           file_url: string;
-          file_type: 'pdf' | 'image';
+          file_type: 'pdf' | 'image' | 'docx';
           original_name?: string | null;
           file_size?: number | null;
           processed?: boolean;

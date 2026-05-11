@@ -20,7 +20,9 @@ DO $$ BEGIN CREATE TYPE transaction_type AS ENUM ('credit', 'debit'); EXCEPTION 
 DO $$ BEGIN CREATE TYPE transaction_status AS ENUM ('pending', 'successful', 'failed'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE transaction_reason AS ENUM ('contribution_reward', 'withdrawal', 'adjustment', 'refund'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE withdrawal_status AS ENUM ('pending', 'processing', 'successful', 'failed'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE file_type AS ENUM ('pdf', 'image'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE file_type AS ENUM ('pdf', 'image', 'docx'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+-- Tolerate older databases where the enum predates 'docx'.
+ALTER TYPE file_type ADD VALUE IF NOT EXISTS 'docx';
 DO $$ BEGIN CREATE TYPE moderation_status AS ENUM ('pending', 'approved', 'rejected'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE subscription_plan AS ENUM ('monthly', 'quarterly', 'yearly'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE subscription_status AS ENUM ('pending', 'active', 'expired', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

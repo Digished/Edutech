@@ -363,6 +363,27 @@ export async function extractQuestionsFromPdfBuffer(
   }
 }
 
+// Word documents are unzipped + parsed via mammoth, then handed to the same
+// text-based extractor used for raw text. Images embedded in the docx are
+// dropped — contributors can attach them per-question on the review page.
+export async function extractQuestionsFromDocxBuffer(
+  buffer: ArrayBuffer,
+): Promise<ExtractionResult> {
+  try {
+    const mod = await import('mammoth');
+    const mammoth = (mod as unknown as { default?: typeof mod }).default ?? mod;
+    const nodeBuffer = Buffer.from(buffer);
+    const { value: text } = await mammoth.extractRawText({ buffer: nodeBuffer });
+    if (!text || !text.trim()) {
+      return { questions: [], error: 'Word document had no extractable text.' };
+    }
+    return await extractQuestionsFromText(text);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Word extraction failed';
+    return { questions: [], error: message };
+  }
+}
+
 export async function extractQuestionsFromText(text: string): Promise<ExtractionResult> {
   try {
     const openai = client();
